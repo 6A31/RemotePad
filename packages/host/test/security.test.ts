@@ -24,6 +24,7 @@ async function makeConfig(overrides: Partial<AppConfig> = {}): Promise<AppConfig
     passwordHash: await bcrypt.hash(TEST_PASSWORD, 4),
     port: 0,
     jwtSecret: "test-jwt-secret-value",
+    robloxMode: false,
     ...overrides,
   };
 }
@@ -151,7 +152,7 @@ describe("security", () => {
       const res = await app.inject({ method: "GET", url: "/api/info" });
       assert.equal(res.statusCode, 200);
       const body = res.json();
-      assert.deepEqual(Object.keys(body).sort(), ["displayHeight", "displayWidth", "hostname", "port"]);
+      assert.deepEqual(Object.keys(body).sort(), ["displayHeight", "displayWidth", "hostname", "port", "robloxMode"]);
       assert.equal(body.port, config.port);
       assert.ok(typeof body.hostname === "string");
     });

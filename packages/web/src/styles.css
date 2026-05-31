@@ -714,10 +714,7 @@ label {
 }
 
 .mobile-exit-fullscreen {
-  position: absolute;
-  top: max(0.5rem, env(safe-area-inset-top, 0px));
-  right: max(0.5rem, env(safe-area-inset-right, 0px));
-  z-index: 2;
+  margin-left: auto;
   padding: 0.35rem 0.65rem;
   font-size: 0.82rem;
   background: rgba(23, 26, 33, 0.92);
@@ -725,11 +722,24 @@ label {
   backdrop-filter: blur(8px);
 }
 
-.mobile-preview-toggle {
+.mobile-floating-toggles {
   position: absolute;
   top: max(0.5rem, env(safe-area-inset-top, 0px));
   left: max(0.5rem, env(safe-area-inset-left, 0px));
+  right: max(0.5rem, env(safe-area-inset-right, 0px));
   z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  pointer-events: none;
+}
+
+.mobile-floating-toggles button {
+  pointer-events: auto;
+}
+
+.mobile-preview-toggle {
   padding: 0.35rem 0.65rem;
   font-size: 0.82rem;
   background: rgba(23, 26, 33, 0.92);
@@ -798,11 +808,75 @@ label {
 }
 
 .left-panel {
+  position: relative;
   border-right: 1px solid #2a2f3a;
   background: #12151c;
 }
 
+.mobile-action-buttons {
+  position: absolute;
+  right: max(0.75rem, env(safe-area-inset-right, 0px));
+  bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+  z-index: 2;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.hold-key-button {
+  min-width: 3.5rem;
+  min-height: 3.5rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  border-color: #4f8cff;
+  background: rgba(79, 140, 255, 0.18);
+  color: #93c5fd;
+  font-weight: 600;
+  font-size: 0.85rem;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.hold-key-button:active {
+  background: rgba(79, 140, 255, 0.38);
+  transform: scale(0.96);
+}
+
+.jump-button {
+  min-width: 4.25rem;
+  min-height: 4.25rem;
+}
+
+.roblox-key-button {
+  min-width: 3.25rem;
+  min-height: 3.25rem;
+  font-size: 1rem;
+}
+
+.mobile-remote-cursor-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.mobile-remote-cursor {
+  position: absolute;
+  width: 14px;
+  height: 22px;
+  transform: translate(-2px, -2px);
+  background:
+    linear-gradient(135deg, #fff 0 45%, transparent 45%) top left / 60% 55% no-repeat,
+    #fff;
+  border: 1px solid rgba(0, 0, 0, 0.85);
+  border-radius: 1px 6px 6px 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+
 .right-panel {
+  position: relative;
   background: #0f1117;
 }
 

@@ -1,14 +1,18 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { WasdKnob } from "../components/WasdKnob";
-import { Touchpad } from "../components/Touchpad";
-import { ScreenCanvas } from "../components/ScreenCanvas";
-import { MobileHeader } from "../components/MobileHeader";
-import { MobileBrowserHint } from "../components/MobileBrowserHint";
-import { client, type ConnectionState } from "../ws/client";
 import {
   getStoredMobileScreenPreview,
   storeMobileScreenPreview,
 } from "../lib/mobileScreenPreview";
+import { JumpButton } from "../components/JumpButton";
+import { HoldKeyButton } from "../components/HoldKeyButton";
+import { Touchpad } from "../components/Touchpad";
+import { ScreenCanvas } from "../components/ScreenCanvas";
+import { MobileHeader } from "../components/MobileHeader";
+import { MobileBrowserHint } from "../components/MobileBrowserHint";
+import { MobileRemoteCursor } from "../components/MobileRemoteCursor";
+import { client, type ConnectionState } from "../ws/client";
+import { useHostInfo } from "../hooks/useHostInfo";
 import { getStoredQuality } from "../lib/streamQuality";
 import {
   getStoredMouseSensitivity,
@@ -28,6 +32,8 @@ interface MobileViewProps {
 }
 
 export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
+  const hostInfo = useHostInfo();
+  const robloxMode = hostInfo?.robloxMode ?? false;
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const [error, setError] = useState<string | null>(null);
   const [mouseSensitivity, setMouseSensitivity] = useState(getStoredMouseSensitivity);
@@ -39,8 +45,26 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
     jpeg: Uint8Array;
     width: number;
     height: number;
+    sourceWidth: number;
+    sourceHeight: number;
   } | null>(null);
+  const [cursor, setCursor] = useState({ x: 0, y: 0 });
   const mobileViewRef = useRef<HTMLDivElement>(null);
+
+  const sourceWidth = frame?.sourceWidth ?? hostInfo?.displayWidth ?? 1920;
+  const sourceHeight = frame?.sourceHeight ?? hostInfo?.displayHeight ?? 1080;
+  const showDesktopCursor = mouseMode === "absolute";
+
+  useEffect(() => {
+    setCursor({ x: sourceWidth / 2, y: sourceHeight / 2 });
+  }, [sourceWidth, sourceHeight, mouseMode]);
+
+  useEffect(() => {
+    if (!robloxMode) {
+      client.keyUp("1");
+      client.keyUp("q");
+    }
+  }, [robloxMode]);
 
   useEffect(() => {
     document.documentElement.classList.add("mobile-session");
@@ -49,6 +73,9 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
     return () => {
       document.documentElement.classList.remove("mobile-session");
       document.body.classList.remove("mobile-session");
+      client.keyUp("space");
+      client.keyUp("1");
+      client.keyUp("q");
     };
   }, []);
 
@@ -83,6 +110,8 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
         jpeg: f.jpeg,
         width: f.width,
         height: f.height,
+        sourceWidth: f.sourceWidth,
+        sourceHeight: f.sourceHeight,
       }),
     );
     client.connect();
@@ -134,11 +163,22 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
 
   const handleKeyDown = useCallback((key: string) => client.keyDown(key), []);
   const handleKeyUp = useCallback((key: string) => client.keyUp(key), []);
+  const handleJumpPress = useCallback(() => handleKeyDown("space"), [handleKeyDown]);
+  const handleJumpRelease = useCallback(() => handleKeyUp("space"), [handleKeyUp]);
   const handleMove = useCallback(
     (dx: number, dy: number) => {
-      client.moveMouseRelative(dx, dy, mouseMode === "relative");
+      if (mouseMode === "relative") {
+        client.moveMouseRelative(dx, dy, true);
+        return;
+      }
+
+      setCursor((current) => ({
+        x: Math.max(0, Math.min(sourceWidth, current.x + dx)),
+        y: Math.max(0, Math.min(sourceHeight, current.y + dy)),
+      }));
+      client.moveMouseRelative(dx, dy, false);
     },
-    [mouseMode],
+    [mouseMode, sourceWidth, sourceHeight],
   );
   const handleClick = useCallback((button: "left" | "right") => {
     client.mouseClick(button);
@@ -208,10 +248,17 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
         {showScreenPreview && (
           <div className="mobile-screen-preview" aria-hidden="true">
             <ScreenCanvas frame={frame} className="mobile-screen-preview-canvas" />
+            <MobileRemoteCursor
+              x={cursor.x}
+              y={cursor.y}
+              sourceWidth={sourceWidth}
+              sourceHeight={sourceHeight}
+              visible={showDesktopCursor}
+            />
           </div>
         )}
         {isFullscreen && (
-          <>
+          <div className="mobile-floating-toggles">
             <button
               type="button"
               className={`mobile-preview-toggle${showScreenPreview ? " active" : ""}`}
@@ -227,16 +274,45 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
             >
               Exit fullscreen
             </button>
-          </>
+          </div>
         )}
         <div className="control-panel left-panel">
           <WasdKnob onKeyDown={handleKeyDown} onKeyUp={handleKeyUp} />
+          <div className="mobile-action-buttons">
+            {robloxMode && (
+              <>
+                <HoldKeyButton
+                  label="Q"
+                  ariaLabel="Q key"
+                  className="hold-key-button roblox-key-button"
+                  onPress={() => handleKeyDown("q")}
+                  onRelease={() => handleKeyUp("q")}
+                />
+                <HoldKeyButton
+                  label="1"
+                  ariaLabel="1 key"
+                  className="hold-key-button roblox-key-button"
+                  onPress={() => handleKeyDown("1")}
+                  onRelease={() => handleKeyUp("1")}
+                />
+              </>
+            )}
+            <JumpButton onPress={handleJumpPress} onRelease={handleJumpRelease} />
+          </div>
         </div>
         <div className="control-panel right-panel">
+          <MobileRemoteCursor
+            x={cursor.x}
+            y={cursor.y}
+            sourceWidth={sourceWidth}
+            sourceHeight={sourceHeight}
+            visible={showDesktopCursor && !showScreenPreview}
+          />
           <Touchpad
             onMove={handleMove}
             onScroll={handleScroll}
             onClick={handleClick}
+            onMoveEnd={() => client.flushGameMouse()}
             sensitivity={mouseSensitivity}
             gameMode={mouseMode === "relative"}
           />

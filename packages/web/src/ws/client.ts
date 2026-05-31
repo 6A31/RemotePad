@@ -18,6 +18,9 @@ export type FrameHandler = (frame: {
   seq: number;
 }) => void;
 
+const BASE_RECONNECT_DELAY_MS = 1000;
+const MAX_RECONNECT_DELAY_MS = 30_000;
+
 export class RemotePadClient {
   private ws: WebSocket | null = null;
   private token: string | null = null;
@@ -28,6 +31,13 @@ export class RemotePadClient {
   private state: ConnectionState = "disconnected";
   private streaming = false;
   private quality: StreamQuality = getStoredQuality();
+  private wantReconnect = false;
+  private reconnectAttempt = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private lifecycleHooksInstalled = false;
+  private pendingGameMouseDx = 0;
+  private pendingGameMouseDy = 0;
+  private gameMouseFlushScheduled = false;
 
   setToken(token: string): void {
     this.token = token;
@@ -54,9 +64,103 @@ export class RemotePadClient {
     this.onStateChange?.(state);
   }
 
+  private installLifecycleHooks(): void {
+    if (this.lifecycleHooksInstalled || typeof document === "undefined") return;
+    this.lifecycleHooksInstalled = true;
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        this.retryConnectionNow();
+      }
+    });
+
+    window.addEventListener("online", () => {
+      this.retryConnectionNow();
+    });
+  }
+
+  private clearReconnectTimer(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+  }
+
+  private detachSocket(): void {
+    if (!this.ws) return;
+    this.ws.onopen = null;
+    this.ws.onmessage = null;
+    this.ws.onclose = null;
+    this.ws.onerror = null;
+    this.ws = null;
+  }
+
+  private scheduleReconnect(): void {
+    if (!this.wantReconnect || !this.token) {
+      this.setState("disconnected");
+      return;
+    }
+
+    this.clearReconnectTimer();
+    const delay = Math.min(
+      BASE_RECONNECT_DELAY_MS * 2 ** this.reconnectAttempt,
+      MAX_RECONNECT_DELAY_MS,
+    );
+    this.reconnectAttempt += 1;
+    this.setState("connecting");
+
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (this.wantReconnect && this.state !== "connected") {
+        this.openConnection();
+      }
+    }, delay);
+  }
+
+  private retryConnectionNow(): void {
+    if (!this.wantReconnect || !this.token) return;
+    if (this.state === "connected" || this.state === "authenticating") return;
+    if (this.ws?.readyState === WebSocket.CONNECTING) return;
+
+    this.clearReconnectTimer();
+    this.reconnectAttempt = 0;
+    this.openConnection();
+  }
+
   connect(): void {
+    this.installLifecycleHooks();
+    this.wantReconnect = true;
+    this.reconnectAttempt = 0;
+    this.clearReconnectTimer();
+    this.openConnection();
+  }
+
+  disconnect(): void {
+    this.wantReconnect = false;
+    this.reconnectAttempt = 0;
+    this.clearReconnectTimer();
+    this.stopStream();
+
     if (this.ws) {
       this.ws.close();
+      this.detachSocket();
+    }
+
+    this.bandwidthWarningHandler?.(null);
+    this.setState("disconnected");
+  }
+
+  private openConnection(): void {
+    if (this.ws) {
+      this.ws.close();
+      this.detachSocket();
+    }
+
+    if (!this.token) {
+      this.wantReconnect = false;
+      this.onError?.("Missing auth token");
+      this.setState("disconnected");
+      return;
     }
 
     this.setState("connecting");
@@ -67,12 +171,7 @@ export class RemotePadClient {
     this.setState("authenticating");
 
     this.ws.onopen = () => {
-      if (!this.token) {
-        this.onError?.("Missing auth token");
-        this.ws?.close();
-        return;
-      }
-      this.send({ type: "auth", token: this.token });
+      this.send({ type: "auth", token: this.token! });
     };
 
     this.ws.onmessage = (event) => {
@@ -95,20 +194,20 @@ export class RemotePadClient {
     this.ws.onclose = () => {
       this.streaming = false;
       this.bandwidthWarningHandler?.(null);
-      this.ws = null;
-      this.setState("disconnected");
+      this.detachSocket();
+
+      if (this.wantReconnect) {
+        this.scheduleReconnect();
+      } else {
+        this.setState("disconnected");
+      }
     };
 
     this.ws.onerror = () => {
-      this.onError?.("WebSocket connection failed");
+      if (this.reconnectAttempt === 0) {
+        this.onError?.("WebSocket connection failed");
+      }
     };
-  }
-
-  disconnect(): void {
-    this.stopStream();
-    this.ws?.close();
-    this.ws = null;
-    this.setState("disconnected");
   }
 
   private handleMessage(data: unknown): void {
@@ -120,9 +219,13 @@ export class RemotePadClient {
 
     switch (message.type) {
       case "auth.ok":
+        this.reconnectAttempt = 0;
+        this.clearReconnectTimer();
         this.setState("connected");
         break;
       case "auth.fail":
+        this.wantReconnect = false;
+        this.clearReconnectTimer();
         this.onError?.(message.error);
         this.ws?.close();
         break;
@@ -181,7 +284,33 @@ export class RemotePadClient {
   }
 
   moveMouseRelative(dx: number, dy: number, game = false): void {
-    this.send({ type: "mouse.move", dx, dy, game });
+    if (game) {
+      this.pendingGameMouseDx += dx;
+      this.pendingGameMouseDy += dy;
+      this.scheduleGameMouseFlush();
+      return;
+    }
+    this.send({ type: "mouse.move", dx, dy, game: false });
+  }
+
+  private scheduleGameMouseFlush(): void {
+    if (this.gameMouseFlushScheduled) return;
+    this.gameMouseFlushScheduled = true;
+
+    requestAnimationFrame(() => {
+      this.gameMouseFlushScheduled = false;
+      this.flushGameMouse();
+    });
+  }
+
+  flushGameMouse(): void {
+    const dx = this.pendingGameMouseDx;
+    const dy = this.pendingGameMouseDy;
+    if (dx === 0 && dy === 0) return;
+
+    this.pendingGameMouseDx = 0;
+    this.pendingGameMouseDy = 0;
+    this.send({ type: "mouse.move", dx, dy, game: true });
   }
 
   moveMouseAbsolute(x: number, y: number): void {

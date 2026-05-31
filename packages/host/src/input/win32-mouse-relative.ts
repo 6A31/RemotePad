@@ -1,27 +1,21 @@
-import koffi from "koffi";
+import { getMessageExtraInfo, INPUT_SIZE, sendInput } from "./win32-user32.js";
 
 const INPUT_MOUSE = 0;
 const MOUSEEVENTF_MOVE = 0x0001;
-const INPUT_SIZE = 40;
 
-let sendInput: ((count: number, inputs: Buffer, size: number) => number) | null = null;
-
-function getSendInput(): ((count: number, inputs: Buffer, size: number) => number) | null {
-  if (process.platform !== "win32") return null;
-  if (!sendInput) {
-    const user32 = koffi.load("user32.dll");
-    sendInput = user32.func("unsigned int SendInput(unsigned int cInputs, void *pInputs, int cbSize)");
-  }
-  return sendInput;
-}
+let pendingDx = 0;
+let pendingDy = 0;
 
 export function moveMouseRelativeWin32(dx: number, dy: number): void {
-  const inject = getSendInput();
-  if (!inject) return;
+  pendingDx += dx;
+  pendingDy += dy;
 
-  const roundedX = Math.round(dx);
-  const roundedY = Math.round(dy);
+  const roundedX = Math.trunc(pendingDx);
+  const roundedY = Math.trunc(pendingDy);
   if (roundedX === 0 && roundedY === 0) return;
+
+  pendingDx -= roundedX;
+  pendingDy -= roundedY;
 
   const input = Buffer.alloc(INPUT_SIZE);
   input.writeUInt32LE(INPUT_MOUSE, 0);
@@ -30,7 +24,12 @@ export function moveMouseRelativeWin32(dx: number, dy: number): void {
   input.writeUInt32LE(0, 16);
   input.writeUInt32LE(MOUSEEVENTF_MOVE, 20);
   input.writeUInt32LE(0, 24);
-  input.writeBigUInt64LE(0n, 28);
+  input.writeBigUInt64LE(getMessageExtraInfo(), 28);
 
-  inject(1, input, INPUT_SIZE);
+  sendInput(1, input);
+}
+
+export function resetMouseRelativeAccumulator(): void {
+  pendingDx = 0;
+  pendingDy = 0;
 }

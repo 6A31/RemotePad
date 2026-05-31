@@ -4,6 +4,7 @@ interface TouchpadProps {
   onMove: (dx: number, dy: number) => void;
   onScroll: (dx: number, dy: number) => void;
   onClick: (button: "left" | "right") => void;
+  onMoveEnd?: () => void;
   sensitivity?: number;
   gameMode?: boolean;
 }
@@ -20,7 +21,7 @@ function centroid(pointers: Map<number, { x: number; y: number }>): { x: number;
   return { x: x / pointers.size, y: y / pointers.size };
 }
 
-export function Touchpad({ onMove, onScroll, onClick, sensitivity = 1.5, gameMode = false }: TouchpadProps) {
+export function Touchpad({ onMove, onScroll, onClick, onMoveEnd, sensitivity = 1.5, gameMode = false }: TouchpadProps) {
   const sensitivityRef = useRef(sensitivity);
   sensitivityRef.current = sensitivity;
 
@@ -96,14 +97,13 @@ export function Touchpad({ onMove, onScroll, onClick, sensitivity = 1.5, gameMod
 
     const dx = (e.clientX - lastPosRef.current.x) * scale;
     const dy = (e.clientY - lastPosRef.current.y) * scale;
+    lastPosRef.current = { x: e.clientX, y: e.clientY };
 
-    if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+    if (dx !== 0 || dy !== 0) {
       movedRef.current = true;
       clearLongPress();
       onMove(dx, dy);
     }
-
-    lastPosRef.current = { x: e.clientX, y: e.clientY };
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
@@ -132,6 +132,8 @@ export function Touchpad({ onMove, onScroll, onClick, sensitivity = 1.5, gameMod
     if (!movedRef.current && !longPressTriggeredRef.current) {
       onClick("left");
     }
+
+    onMoveEnd?.();
 
     lastPosRef.current = null;
     lastCentroidRef.current = null;

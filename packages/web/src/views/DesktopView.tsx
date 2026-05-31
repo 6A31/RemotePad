@@ -8,6 +8,8 @@ import { keyboardEventToProtocolKey } from "../lib/keyUtils";
 import { getStoredQuality, storeQuality } from "../lib/streamQuality";
 import { getStoredMouseMode, storeMouseMode, type MouseMode } from "../lib/mouseMode";
 import { getStoredMouseSensitivity } from "../lib/mouseSensitivity";
+import { useHostInfo } from "../hooks/useHostInfo";
+import { patchAppConfig } from "../lib/appConfig";
 import type { ViewMode } from "../App";
 
 const QUALITY_OPTIONS: { value: StreamQuality; label: string }[] = [
@@ -27,7 +29,9 @@ interface DesktopViewProps {
 }
 
 export function DesktopView({ onLogout, onViewModeChange }: DesktopViewProps) {
+  const hostInfo = useHostInfo();
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
+  const [configError, setConfigError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [bandwidthWarning, setBandwidthWarning] = useState<string | null>(null);
   const [quality, setQuality] = useState<StreamQuality>(getStoredQuality);
@@ -246,6 +250,19 @@ export function DesktopView({ onLogout, onViewModeChange }: DesktopViewProps) {
     releaseInputCapture();
   };
 
+  const handleRobloxModeChange = async (enabled: boolean) => {
+    const token = sessionStorage.getItem("remotepad_token");
+    if (!token) return;
+
+    setConfigError(null);
+    const result = await patchAppConfig(token, { robloxMode: enabled });
+    if (!result) {
+      setConfigError("Could not save app settings");
+      return;
+    }
+    window.dispatchEvent(new Event("remotepad-config-updated"));
+  };
+
   const handleFullscreen = async () => {
     if (!viewportRef.current) return;
     const active = await toggleFullscreen(viewportRef.current);
@@ -290,6 +307,27 @@ export function DesktopView({ onLogout, onViewModeChange }: DesktopViewProps) {
               ))}
             </div>
           </div>
+          <div className="quality-control">
+            <span className="quality-label">Roblox</span>
+            <div className="segmented-control" role="group" aria-label="Roblox mode">
+              <button
+                type="button"
+                className={hostInfo?.robloxMode ? undefined : "active"}
+                aria-pressed={!hostInfo?.robloxMode}
+                onClick={() => hostInfo?.robloxMode && void handleRobloxModeChange(false)}
+              >
+                Off
+              </button>
+              <button
+                type="button"
+                className={hostInfo?.robloxMode ? "active" : undefined}
+                aria-pressed={hostInfo?.robloxMode ?? false}
+                onClick={() => !hostInfo?.robloxMode && void handleRobloxModeChange(true)}
+              >
+                On
+              </button>
+            </div>
+          </div>
           <button type="button" onClick={() => void handleFullscreen()}>
             {isFullscreen ? "Exit fullscreen" : "Fullscreen"}
           </button>
@@ -302,7 +340,10 @@ export function DesktopView({ onLogout, onViewModeChange }: DesktopViewProps) {
         </div>
       </header>
       {error && <p className="banner error">{error}</p>}
-      {bandwidthWarning && !error && <p className="banner warning">{bandwidthWarning}</p>}
+      {configError && <p className="banner error">{configError}</p>}
+      {bandwidthWarning && !error && !configError && (
+        <p className="banner warning">{bandwidthWarning}</p>
+      )}
       <div
         ref={viewportRef}
         className={`screen-viewport${inputCaptured ? " screen-viewport-captured" : ""}${mouseMode === "relative" ? " screen-viewport-game" : ""}`}

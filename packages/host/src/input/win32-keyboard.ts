@@ -1,19 +1,9 @@
-import koffi from "koffi";
+import { getMessageExtraInfo, INPUT_SIZE, sendInput, vkToScanCode } from "./win32-user32.js";
 
 const INPUT_KEYBOARD = 1;
 const KEYEVENTF_KEYUP = 0x0002;
-const INPUT_SIZE = 40;
-
-let sendInput: ((count: number, inputs: Buffer, size: number) => number) | null = null;
-
-function getSendInput(): ((count: number, inputs: Buffer, size: number) => number) | null {
-  if (process.platform !== "win32") return null;
-  if (!sendInput) {
-    const user32 = koffi.load("user32.dll");
-    sendInput = user32.func("unsigned int SendInput(unsigned int cInputs, void *pInputs, int cbSize)");
-  }
-  return sendInput;
-}
+const KEYEVENTF_EXTENDEDKEY = 0x0001;
+const KEYEVENTF_SCANCODE = 0x0008;
 
 const VK: Record<string, number> = {
   w: 0x57,
@@ -66,18 +56,22 @@ export function resolveKeyToVk(key: string): number | null {
 }
 
 function sendKeyEvent(vk: number, keyUp: boolean): void {
-  const inject = getSendInput();
-  if (!inject) return;
+  const { scan, extended } = vkToScanCode(vk);
+  if (scan === 0) return;
+
+  let flags = KEYEVENTF_SCANCODE;
+  if (keyUp) flags |= KEYEVENTF_KEYUP;
+  if (extended) flags |= KEYEVENTF_EXTENDEDKEY;
 
   const input = Buffer.alloc(INPUT_SIZE);
   input.writeUInt32LE(INPUT_KEYBOARD, 0);
   input.writeUInt16LE(vk, 8);
-  input.writeUInt16LE(0, 10);
-  input.writeUInt32LE(keyUp ? KEYEVENTF_KEYUP : 0, 12);
+  input.writeUInt16LE(scan, 10);
+  input.writeUInt32LE(flags, 12);
   input.writeUInt32LE(0, 16);
-  input.writeBigUInt64LE(0n, 24);
+  input.writeBigUInt64LE(getMessageExtraInfo(), 24);
 
-  inject(1, input, INPUT_SIZE);
+  sendInput(1, input);
 }
 
 export function keyDownWin32(key: string): boolean {

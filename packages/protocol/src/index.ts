@@ -117,9 +117,16 @@ export const HostInfoSchema = z.object({
   port: z.number(),
   displayWidth: z.number(),
   displayHeight: z.number(),
+  robloxMode: z.boolean(),
 });
 
 export type HostInfo = z.infer<typeof HostInfoSchema>;
+
+export const AppConfigPatchSchema = z.object({
+  robloxMode: z.boolean().optional(),
+});
+
+export type AppConfigPatch = z.infer<typeof AppConfigPatchSchema>;
 
 export function parseHostInfo(data: unknown): HostInfo | null {
   const result = HostInfoSchema.safeParse(data);

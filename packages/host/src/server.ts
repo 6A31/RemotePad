@@ -28,6 +28,7 @@ import {
 import { issueToken, verifyPassword, verifyToken } from "./security/auth.js";
 import { isPrivateOrLocalIp, rejectReason } from "./security/ip-filter.js";
 import { registerInfoRoute } from "./routes/info.js";
+import { registerConfigRoute } from "./routes/config.js";
 import {
   canSendFrame,
   createFrameSendGuard,
@@ -216,6 +217,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   });
 
   registerInfoRoute(app, config);
+  registerConfigRoute(app, config);
 
   app.post("/api/login", async (request, reply) => {
     const ip = request.ip;

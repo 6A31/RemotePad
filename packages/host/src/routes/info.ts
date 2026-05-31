@@ -11,6 +11,7 @@ export function registerInfoRoute(app: FastifyInstance, config: AppConfig): void
       port: config.port,
       displayWidth: display.inputWidth,
       displayHeight: display.inputHeight,
+      robloxMode: config.robloxMode,
     };
   });
 }

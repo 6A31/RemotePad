@@ -10,6 +10,7 @@ export interface AppConfig {
   passwordHash: string;
   port: number;
   jwtSecret: string;
+  robloxMode: boolean;
 }
 
 const CONFIG_DIR = join(homedir(), "AppData", "Roaming", "RemotePad");
@@ -24,7 +25,14 @@ function generatePassword(): string {
 export async function loadConfig(): Promise<AppConfig> {
   try {
     const raw = await readFile(getConfigPath(), "utf8");
-    return JSON.parse(raw) as AppConfig;
+    const parsed = JSON.parse(raw) as Partial<AppConfig>;
+    return {
+      username: parsed.username ?? "admin",
+      passwordHash: parsed.passwordHash!,
+      port: parsed.port ?? DEFAULT_PORT,
+      jwtSecret: parsed.jwtSecret!,
+      robloxMode: parsed.robloxMode === true,
+    };
   } catch {
     const plainPassword = generatePassword();
     const config: AppConfig = {
@@ -32,6 +40,7 @@ export async function loadConfig(): Promise<AppConfig> {
       passwordHash: await bcrypt.hash(plainPassword, 12),
       port: DEFAULT_PORT,
       jwtSecret: randomBytes(32).toString("hex"),
+      robloxMode: false,
     };
     await saveConfig(config);
     cachedPlainPassword = plainPassword;
