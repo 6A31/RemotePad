@@ -1,0 +1,23 @@
+{
+  "name": "remotepad",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n host,web -c blue,green \"npm run dev -w @remotepad/host\" \"npm run dev -w @remotepad/web\"",
+    "build": "npm run build -w @remotepad/protocol && npm run build -w @remotepad/web && npm run build -w @remotepad/host",
+    "start": "npm run start -w @remotepad/host",
+    "stop": "stop.cmd",
+    "test": "npm run test -w @remotepad/host",
+    "test:security": "npm run test:security -w @remotepad/host",
+    "change-password": "npx tsx packages/host/scripts/change-password.ts",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
