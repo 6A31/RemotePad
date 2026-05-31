@@ -171,28 +171,28 @@ async function handleClientMessage(
       break;
     }
     case "mouse.move":
-      await moveMouseRelative(message.dx, message.dy, message.game ?? false);
+      void moveMouseRelative(message.dx, message.dy, message.game ?? false);
       break;
     case "mouse.moveAbs":
-      await moveMouseAbsolute(message.x, message.y);
+      void moveMouseAbsolute(message.x, message.y);
       break;
     case "mouse.down":
-      await mouseDown(message.button);
+      void mouseDown(message.button);
       break;
     case "mouse.up":
-      await mouseUp(message.button);
+      void mouseUp(message.button);
       break;
     case "mouse.click":
-      await mouseClick(message.button);
+      void mouseClick(message.button);
       break;
     case "mouse.scroll":
-      await scrollMouse(message.dx, message.dy);
+      void scrollMouse(message.dx, message.dy);
       break;
     case "key.down":
-      await keyDown(message.key);
+      void keyDown(message.key);
       break;
     case "key.up":
-      await keyUp(message.key);
+      void keyUp(message.key);
       break;
   }
 

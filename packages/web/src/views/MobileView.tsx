@@ -1,9 +1,15 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { WasdKnob } from "../components/WasdKnob";
 import { Touchpad } from "../components/Touchpad";
+import { ScreenCanvas } from "../components/ScreenCanvas";
 import { MobileHeader } from "../components/MobileHeader";
 import { MobileBrowserHint } from "../components/MobileBrowserHint";
 import { client, type ConnectionState } from "../ws/client";
+import {
+  getStoredMobileScreenPreview,
+  storeMobileScreenPreview,
+} from "../lib/mobileScreenPreview";
+import { getStoredQuality } from "../lib/streamQuality";
 import {
   getStoredMouseSensitivity,
   MAX_MOUSE_SENSITIVITY,
@@ -28,26 +34,21 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
   const [mouseMode, setMouseMode] = useState<MouseMode>(getStoredMouseMode);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showBrowserHint, setShowBrowserHint] = useState(false);
+  const [showScreenPreview, setShowScreenPreview] = useState(getStoredMobileScreenPreview);
+  const [frame, setFrame] = useState<{
+    jpeg: Uint8Array;
+    width: number;
+    height: number;
+  } | null>(null);
   const mobileViewRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     document.documentElement.classList.add("mobile-session");
     document.body.classList.add("mobile-session");
 
-    const blockTouchScroll = (event: TouchEvent) => {
-      const target = event.target;
-      if (target instanceof Element && target.closest(".mobile-header, .mobile-exit-fullscreen, .mobile-browser-hint")) {
-        return;
-      }
-      event.preventDefault();
-    };
-
-    document.addEventListener("touchmove", blockTouchScroll, { passive: false });
-
     return () => {
       document.documentElement.classList.remove("mobile-session");
       document.body.classList.remove("mobile-session");
-      document.removeEventListener("touchmove", blockTouchScroll);
     };
   }, []);
 
@@ -77,12 +78,59 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
   useEffect(() => {
     client.onConnectionState(setConnectionState);
     client.onConnectionError(setError);
+    client.onFrame((f) =>
+      setFrame({
+        jpeg: f.jpeg,
+        width: f.width,
+        height: f.height,
+      }),
+    );
     client.connect();
 
     return () => {
+      client.stopStream();
       client.disconnect();
     };
   }, []);
+
+  useEffect(() => {
+    if (connectionState !== "connected") return;
+
+    if (showScreenPreview) {
+      client.setQuality(getStoredQuality());
+      client.startStream();
+    } else {
+      client.stopStream();
+      setFrame(null);
+    }
+  }, [connectionState, showScreenPreview]);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (!showScreenPreview) return;
+      if (document.hidden) {
+        client.stopStream();
+      } else if (client.connected) {
+        client.startStream();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [showScreenPreview]);
+
+  useEffect(() => {
+    const onResize = () => {
+      if (showScreenPreview && client.connected) {
+        client.updateStreamDisplayLimit();
+      }
+    };
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+  }, [showScreenPreview]);
 
   const handleKeyDown = useCallback((key: string) => client.keyDown(key), []);
   const handleKeyUp = useCallback((key: string) => client.keyUp(key), []);
@@ -109,6 +157,14 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
     storeMouseMode(next);
   };
 
+  const handleToggleScreenPreview = () => {
+    setShowScreenPreview((prev) => {
+      const next = !prev;
+      storeMobileScreenPreview(next);
+      return next;
+    });
+  };
+
   const handleToggleFullscreen = async () => {
     if (!mobileViewRef.current) return;
     const active = await toggleFullscreen(mobileViewRef.current);
@@ -127,10 +183,12 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
             connectionState={connectionState}
             mouseSensitivity={mouseSensitivity}
             mouseMode={mouseMode}
+            showScreenPreview={showScreenPreview}
             minSensitivity={MIN_MOUSE_SENSITIVITY}
             maxSensitivity={MAX_MOUSE_SENSITIVITY}
             onSensitivityChange={handleSensitivityChange}
             onMouseModeChange={handleMouseModeChange}
+            onScreenPreviewChange={handleToggleScreenPreview}
             onFullscreen={() => void handleToggleFullscreen()}
             onDesktopLayout={() => onViewModeChange("desktop")}
             onLogout={onLogout}
@@ -144,15 +202,32 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
           {error && <p className="banner error mobile-banner">{error}</p>}
         </>
       )}
-      <div className="mobile-controls">
+      <div
+        className={`mobile-controls${showScreenPreview ? " mobile-controls-with-preview" : ""}`}
+      >
+        {showScreenPreview && (
+          <div className="mobile-screen-preview" aria-hidden="true">
+            <ScreenCanvas frame={frame} className="mobile-screen-preview-canvas" />
+          </div>
+        )}
         {isFullscreen && (
-          <button
-            type="button"
-            className="mobile-exit-fullscreen"
-            onClick={() => void handleToggleFullscreen()}
-          >
-            Exit fullscreen
-          </button>
+          <>
+            <button
+              type="button"
+              className={`mobile-preview-toggle${showScreenPreview ? " active" : ""}`}
+              aria-pressed={showScreenPreview}
+              onClick={handleToggleScreenPreview}
+            >
+              Screen {showScreenPreview ? "on" : "off"}
+            </button>
+            <button
+              type="button"
+              className="mobile-exit-fullscreen"
+              onClick={() => void handleToggleFullscreen()}
+            >
+              Exit fullscreen
+            </button>
+          </>
         )}
         <div className="control-panel left-panel">
           <WasdKnob onKeyDown={handleKeyDown} onKeyUp={handleKeyUp} />

@@ -370,7 +370,7 @@ label {
 
 .mobile-header-settings {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 0.85fr 0.75fr;
   gap: 0.5rem;
   padding: 0.55rem 0.75rem 0.65rem;
   background: #12151c;
@@ -651,6 +651,7 @@ label {
   overflow: hidden;
   touch-action: none;
   position: relative;
+  isolation: isolate;
 }
 
 .mobile-controls:fullscreen {
@@ -661,6 +662,11 @@ label {
   padding-right: env(safe-area-inset-right, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-left: env(safe-area-inset-left, 0px);
+}
+
+.mobile-controls-with-preview,
+.mobile-controls-with-preview:fullscreen {
+  background: #000;
 }
 
 .mobile-view-controls-fullscreen {
@@ -682,7 +688,7 @@ label {
   }
 
   .mobile-header-settings {
-    grid-template-columns: 1.15fr 0.85fr;
+    grid-template-columns: 1.15fr 0.85fr 0.75fr;
     padding: 0.4rem 0.65rem 0.5rem;
     gap: 0.45rem;
   }
@@ -719,6 +725,67 @@ label {
   backdrop-filter: blur(8px);
 }
 
+.mobile-preview-toggle {
+  position: absolute;
+  top: max(0.5rem, env(safe-area-inset-top, 0px));
+  left: max(0.5rem, env(safe-area-inset-left, 0px));
+  z-index: 2;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.82rem;
+  background: rgba(23, 26, 33, 0.92);
+  border: 1px solid #3c4048;
+  border-radius: 6px;
+  color: #e5e7eb;
+  backdrop-filter: blur(8px);
+}
+
+.mobile-preview-toggle.active {
+  border-color: #4f8cff;
+  color: #93c5fd;
+}
+
+.mobile-screen-preview {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  pointer-events: none;
+  background: #000;
+}
+
+.mobile-screen-preview-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.mobile-controls-with-preview .control-panel {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  border-color: rgba(42, 47, 58, 0.45);
+}
+
+.mobile-controls-with-preview .left-panel {
+  background: rgba(18, 21, 28, 0.28);
+}
+
+.mobile-controls-with-preview .right-panel {
+  background: rgba(15, 17, 23, 0.28);
+}
+
+.mobile-controls-with-preview .touchpad {
+  background: transparent;
+}
+
+.mobile-controls-with-preview .wasd-placeholder {
+  opacity: 0.55;
+}
+
 .control-panel {
   display: flex;
   align-items: center;
@@ -741,10 +808,30 @@ label {
 
 .wasd-knob {
   position: relative;
-  width: min(62vw, 62svh, 280px);
-  aspect-ratio: 1;
+  width: 100%;
+  height: 100%;
   touch-action: none;
   flex-shrink: 0;
+}
+
+.wasd-placeholder {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0.35;
+}
+
+.wasd-placeholder .wasd-ring {
+  background: radial-gradient(circle, rgba(26, 29, 36, 0.5) 0%, rgba(18, 21, 28, 0.3) 100%);
+  border-color: rgba(60, 64, 72, 0.6);
+}
+
+.wasd-active {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 
 .wasd-ring {
@@ -833,12 +920,19 @@ label {
     border-bottom: 1px solid #2a2f3a;
   }
 
+  .wasd-placeholder {
+    width: min(56vw, 32svh, 240px) !important;
+    height: min(56vw, 32svh, 240px) !important;
+  }
+
   .wasd-knob {
-    width: min(56vw, 32svh, 240px);
+    width: 100%;
+    height: 100%;
   }
 
   .mobile-controls:fullscreen .wasd-knob {
-    width: min(72vw, 44svh, 320px);
+    width: 100%;
+    height: 100%;
   }
 
   .touchpad-hint {
@@ -848,6 +942,7 @@ label {
 
 @media (orientation: landscape) {
   .mobile-controls:fullscreen .wasd-knob {
-    width: min(36vw, 78svh, 300px);
+    width: 100%;
+    height: 100%;
   }
 }

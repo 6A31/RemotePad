@@ -5,20 +5,55 @@ interface WasdKnobProps {
   onKeyUp: (key: string) => void;
 }
 
-const DEAD_ZONE = 0.15;
+/** Ignore small movement near stick center. */
+const DEAD_ZONE = 0.18;
+/** Secondary axis must exceed this before a diagonal combo is allowed. */
+const DIAGONAL_AXIS = 0.4;
+
+function knobDiameterPx(): number {
+  return Math.min(window.innerWidth * 0.56, window.innerHeight * 0.32, 240);
+}
 
 function keysFromOffset(nx: number, ny: number): string[] {
+  const up = ny < -DEAD_ZONE;
+  const down = ny > DEAD_ZONE;
+  const left = nx < -DEAD_ZONE;
+  const right = nx > DEAD_ZONE;
+
   const keys: string[] = [];
-  if (ny < -DEAD_ZONE) keys.push("w");
-  if (ny > DEAD_ZONE) keys.push("s");
-  if (nx < -DEAD_ZONE) keys.push("a");
-  if (nx > DEAD_ZONE) keys.push("d");
+  if (up) keys.push("w");
+  if (down) keys.push("s");
+  if (left) keys.push("a");
+  if (right) keys.push("d");
+
+  const horiz = Math.abs(nx);
+  const vert = Math.abs(ny);
+
+  if ((up || down) && (left || right) && horiz < DIAGONAL_AXIS) {
+    return keys.filter((key) => key === "w" || key === "s");
+  }
+  if ((left || right) && (up || down) && vert < DIAGONAL_AXIS) {
+    return keys.filter((key) => key === "a" || key === "d");
+  }
+
   return keys;
+}
+
+function WasdLabels() {
+  return (
+    <>
+      <span className="wasd-label w">W</span>
+      <span className="wasd-label a">A</span>
+      <span className="wasd-label s">S</span>
+      <span className="wasd-label d">D</span>
+    </>
+  );
 }
 
 export function WasdKnob({ onKeyDown, onKeyUp }: WasdKnobProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
   const activeKeysRef = useRef<Set<string>>(new Set());
   const pointerIdRef = useRef<number | null>(null);
 
@@ -44,20 +79,17 @@ export function WasdKnob({ onKeyDown, onKeyUp }: WasdKnobProps) {
     }
     activeKeysRef.current = new Set();
     setOffset({ x: 0, y: 0 });
+    setAnchor(null);
   }, [onKeyUp]);
 
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (pointerIdRef.current !== e.pointerId) return;
+  const updateFromPointer = (e: React.PointerEvent, origin: { x: number; y: number }) => {
     const container = containerRef.current;
     if (!container) return;
 
     const rect = container.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const maxRadius = Math.min(rect.width, rect.height) * 0.35;
-
-    let dx = e.clientX - cx;
-    let dy = e.clientY - cy;
+    const maxRadius = knobDiameterPx() * 0.35;
+    let dx = e.clientX - rect.left - origin.x;
+    let dy = e.clientY - rect.top - origin.y;
     const dist = Math.hypot(dx, dy);
     if (dist > maxRadius) {
       dx = (dx / dist) * maxRadius;
@@ -65,16 +97,27 @@ export function WasdKnob({ onKeyDown, onKeyUp }: WasdKnobProps) {
     }
 
     setOffset({ x: dx, y: dy });
-    const nx = dx / maxRadius;
-    const ny = dy / maxRadius;
-    applyKeys(keysFromOffset(nx, ny));
+    applyKeys(keysFromOffset(dx / maxRadius, dy / maxRadius));
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     pointerIdRef.current = e.pointerId;
-    handlePointerMove(e);
+
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const origin = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    setAnchor(origin);
+    setOffset({ x: 0, y: 0 });
+    applyKeys([]);
+    updateFromPointer(e, origin);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (pointerIdRef.current !== e.pointerId || !anchor) return;
+    updateFromPointer(e, anchor);
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
@@ -82,6 +125,8 @@ export function WasdKnob({ onKeyDown, onKeyUp }: WasdKnobProps) {
     pointerIdRef.current = null;
     releaseAll();
   };
+
+  const knobSize = knobDiameterPx();
 
   return (
     <div
@@ -92,15 +137,24 @@ export function WasdKnob({ onKeyDown, onKeyUp }: WasdKnobProps) {
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
     >
-      <div className="wasd-ring" />
-      <div
-        className="wasd-stick"
-        style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
-      />
-      <span className="wasd-label w">W</span>
-      <span className="wasd-label a">A</span>
-      <span className="wasd-label s">S</span>
-      <span className="wasd-label d">D</span>
+      <div className="wasd-placeholder" style={{ width: knobSize, height: knobSize }}>
+        <div className="wasd-ring" />
+        <WasdLabels />
+      </div>
+
+      {anchor && (
+        <div
+          className="wasd-active"
+          style={{ width: knobSize, height: knobSize, left: anchor.x, top: anchor.y }}
+        >
+          <div className="wasd-ring" />
+          <div
+            className="wasd-stick"
+            style={{ transform: `translate(${offset.x}px, ${offset.y}px)` }}
+          />
+          <WasdLabels />
+        </div>
+      )}
     </div>
   );
 }

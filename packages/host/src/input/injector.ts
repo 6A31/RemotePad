@@ -8,6 +8,7 @@ import {
 import type { MouseButton } from "@remotepad/protocol";
 import { getPrimaryMonitorInfo } from "../capture/monitor-info.js";
 import { moveMouseRelativeWin32 } from "./win32-mouse-relative.js";
+import { keyDownWin32, keyUpWin32, keyUpVk, resolveKeyToVk } from "./win32-keyboard.js";
 
 mouse.config.mouseSpeed = 2000;
 
@@ -48,6 +49,7 @@ const KEY_MAP: Record<string, Key> = {
 };
 
 const heldKeys = new Set<Key>();
+const heldVkKeys = new Set<number>();
 
 function toButton(button: MouseButton): Button {
   switch (button) {
@@ -121,6 +123,14 @@ export async function scrollMouse(dx: number, dy: number): Promise<void> {
 }
 
 export async function keyDown(key: string): Promise<void> {
+  if (process.platform === "win32") {
+    const vk = resolveKeyToVk(key);
+    if (vk === null || heldVkKeys.has(vk)) return;
+    heldVkKeys.add(vk);
+    keyDownWin32(key);
+    return;
+  }
+
   const resolved = resolveKey(key);
   if (!resolved || heldKeys.has(resolved)) return;
   heldKeys.add(resolved);
@@ -128,6 +138,14 @@ export async function keyDown(key: string): Promise<void> {
 }
 
 export async function keyUp(key: string): Promise<void> {
+  if (process.platform === "win32") {
+    const vk = resolveKeyToVk(key);
+    if (vk === null || !heldVkKeys.has(vk)) return;
+    heldVkKeys.delete(vk);
+    keyUpWin32(key);
+    return;
+  }
+
   const resolved = resolveKey(key);
   if (!resolved || !heldKeys.has(resolved)) return;
   heldKeys.delete(resolved);
@@ -135,6 +153,14 @@ export async function keyUp(key: string): Promise<void> {
 }
 
 export async function releaseAllKeys(): Promise<void> {
+  if (process.platform === "win32") {
+    for (const vk of [...heldVkKeys]) {
+      heldVkKeys.delete(vk);
+      keyUpVk(vk);
+    }
+    return;
+  }
+
   for (const key of [...heldKeys]) {
     await keyboard.releaseKey(key);
     heldKeys.delete(key);

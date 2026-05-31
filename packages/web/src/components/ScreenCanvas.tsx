@@ -1,4 +1,4 @@
-import { forwardRef, useEffect } from "react";
+import { forwardRef, useEffect, useRef } from "react";
 
 interface ScreenCanvasProps {
   frame: { jpeg: Uint8Array; width: number; height: number } | null;
@@ -15,8 +15,10 @@ export const ScreenCanvas = forwardRef<HTMLCanvasElement, ScreenCanvasProps>(
     { frame, onMouseMove, onMouseDown, onMouseUp, onClick, onContextMenu, className },
     ref,
   ) {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+
     useEffect(() => {
-      const canvas = typeof ref === "function" ? null : ref?.current;
+      const canvas = canvasRef.current;
       if (!canvas || !frame) return;
 
       const ctx = canvas.getContext("2d");
@@ -36,11 +38,20 @@ export const ScreenCanvas = forwardRef<HTMLCanvasElement, ScreenCanvasProps>(
       img.src = url;
 
       return () => URL.revokeObjectURL(url);
-    }, [frame, ref]);
+    }, [frame]);
+
+    const assignRef = (node: HTMLCanvasElement | null) => {
+      canvasRef.current = node;
+      if (typeof ref === "function") {
+        ref(node);
+      } else if (ref) {
+        ref.current = node;
+      }
+    };
 
     return (
       <canvas
-        ref={ref}
+        ref={assignRef}
         className={className ?? "screen-canvas"}
         onMouseMove={onMouseMove}
         onMouseDown={onMouseDown}

@@ -11,10 +11,12 @@ interface MobileHeaderProps {
   connectionState: ConnectionState;
   mouseSensitivity: number;
   mouseMode: MouseMode;
+  showScreenPreview: boolean;
   minSensitivity: number;
   maxSensitivity: number;
   onSensitivityChange: (value: number) => void;
   onMouseModeChange: (mode: MouseMode) => void;
+  onScreenPreviewChange: () => void;
   onFullscreen: () => void;
   onDesktopLayout: () => void;
   onLogout: () => void;
@@ -56,10 +58,12 @@ export function MobileHeader({
   connectionState,
   mouseSensitivity,
   mouseMode,
+  showScreenPreview,
   minSensitivity,
   maxSensitivity,
   onSensitivityChange,
   onMouseModeChange,
+  onScreenPreviewChange,
   onFullscreen,
   onDesktopLayout,
   onLogout,
@@ -132,6 +136,27 @@ export function MobileHeader({
                 {option.label}
               </button>
             ))}
+          </div>
+        </div>
+        <div className="mobile-setting mobile-setting-mode">
+          <span className="mobile-setting-label">Screen</span>
+          <div className="segmented-control mobile-segmented" role="group" aria-label="Screen preview">
+            <button
+              type="button"
+              className={showScreenPreview ? undefined : "active"}
+              aria-pressed={!showScreenPreview}
+              onClick={() => showScreenPreview && onScreenPreviewChange()}
+            >
+              Off
+            </button>
+            <button
+              type="button"
+              className={showScreenPreview ? "active" : undefined}
+              aria-pressed={showScreenPreview}
+              onClick={() => !showScreenPreview && onScreenPreviewChange()}
+            >
+              On
+            </button>
           </div>
         </div>
       </div>
