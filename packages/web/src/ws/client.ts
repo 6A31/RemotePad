@@ -5,6 +5,7 @@ import {
   type StreamQuality,
 } from "@remotepad/protocol";
 import { getStoredQuality } from "../lib/streamQuality";
+import { getClientStreamMaxWidth } from "../lib/streamDisplay";
 
 export type ConnectionState = "disconnected" | "connecting" | "authenticating" | "connected";
 
@@ -23,6 +24,7 @@ export class RemotePadClient {
   private frameHandler: FrameHandler | null = null;
   private onStateChange: ((state: ConnectionState) => void) | null = null;
   private onError: ((message: string) => void) | null = null;
+  private bandwidthWarningHandler: ((message: string | null) => void) | null = null;
   private state: ConnectionState = "disconnected";
   private streaming = false;
   private quality: StreamQuality = getStoredQuality();
@@ -41,6 +43,10 @@ export class RemotePadClient {
 
   onConnectionError(handler: (message: string) => void): void {
     this.onError = handler;
+  }
+
+  onBandwidthWarning(handler: (message: string | null) => void): void {
+    this.bandwidthWarningHandler = handler;
   }
 
   private setState(state: ConnectionState): void {
@@ -88,6 +94,7 @@ export class RemotePadClient {
 
     this.ws.onclose = () => {
       this.streaming = false;
+      this.bandwidthWarningHandler?.(null);
       this.ws = null;
       this.setState("disconnected");
     };
@@ -122,6 +129,12 @@ export class RemotePadClient {
       case "error":
         this.onError?.(message.message);
         break;
+      case "stream.warn":
+        this.bandwidthWarningHandler?.(message.message);
+        break;
+      case "stream.ok":
+        this.bandwidthWarningHandler?.(null);
+        break;
     }
   }
 
@@ -134,14 +147,31 @@ export class RemotePadClient {
   setQuality(quality: StreamQuality): void {
     this.quality = quality;
     if (this.streaming) {
-      this.send({ type: "stream.setQuality", quality });
+      this.send({
+        type: "stream.setQuality",
+        quality,
+        maxWidth: getClientStreamMaxWidth(),
+      });
     }
+  }
+
+  updateStreamDisplayLimit(): void {
+    if (!this.streaming) return;
+    this.send({
+      type: "stream.setQuality",
+      quality: this.quality,
+      maxWidth: getClientStreamMaxWidth(),
+    });
   }
 
   startStream(): void {
     if (this.state !== "connected" || this.streaming) return;
     this.streaming = true;
-    this.send({ type: "stream.start", quality: this.quality });
+    this.send({
+      type: "stream.start",
+      quality: this.quality,
+      maxWidth: getClientStreamMaxWidth(),
+    });
   }
 
   stopStream(): void {
@@ -150,8 +180,8 @@ export class RemotePadClient {
     this.send({ type: "stream.stop" });
   }
 
-  moveMouseRelative(dx: number, dy: number): void {
-    this.send({ type: "mouse.move", dx, dy });
+  moveMouseRelative(dx: number, dy: number, game = false): void {
+    this.send({ type: "mouse.move", dx, dy, game });
   }
 
   moveMouseAbsolute(x: number, y: number): void {

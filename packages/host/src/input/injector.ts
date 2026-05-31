@@ -7,6 +7,7 @@ import {
 } from "@nut-tree-fork/nut-js";
 import type { MouseButton } from "@remotepad/protocol";
 import { getPrimaryMonitorInfo } from "../capture/monitor-info.js";
+import { moveMouseRelativeWin32 } from "./win32-mouse-relative.js";
 
 mouse.config.mouseSpeed = 2000;
 
@@ -75,9 +76,13 @@ function resolveKey(key: string): Key | null {
   return null;
 }
 
-export async function moveMouseRelative(dx: number, dy: number): Promise<void> {
+export async function moveMouseRelative(dx: number, dy: number, game = false): Promise<void> {
+  if (game) {
+    moveMouseRelativeWin32(dx, dy);
+    return;
+  }
   const pos = await mouse.getPosition();
-  await mouse.setPosition(new Point(pos.x + dx, pos.y + dy));
+  await mouse.setPosition(new Point(pos.x + Math.round(dx), pos.y + Math.round(dy)));
 }
 
 export async function moveMouseAbsolute(x: number, y: number): Promise<void> {

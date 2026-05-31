@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { WasdKnob } from "../components/WasdKnob";
 import { Touchpad } from "../components/Touchpad";
-import { HostLabel } from "../components/HostLabel";
+import { MobileHeader } from "../components/MobileHeader";
+import { MobileBrowserHint } from "../components/MobileBrowserHint";
 import { client, type ConnectionState } from "../ws/client";
 import {
   getStoredMouseSensitivity,
@@ -10,6 +11,8 @@ import {
   storeMouseSensitivity,
 } from "../lib/mouseSensitivity";
 import { toggleFullscreen } from "../lib/screenUtils";
+import { getStoredMouseMode, storeMouseMode, type MouseMode } from "../lib/mouseMode";
+import { isLandscapePhone, shouldShowBrowserHint } from "../lib/displayMode";
 import type { ViewMode } from "../App";
 
 interface MobileViewProps {
@@ -22,8 +25,10 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const [error, setError] = useState<string | null>(null);
   const [mouseSensitivity, setMouseSensitivity] = useState(getStoredMouseSensitivity);
+  const [mouseMode, setMouseMode] = useState<MouseMode>(getStoredMouseMode);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const controlsRef = useRef<HTMLDivElement>(null);
+  const [showBrowserHint, setShowBrowserHint] = useState(false);
+  const mobileViewRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     document.documentElement.classList.add("mobile-session");
@@ -31,7 +36,7 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
 
     const blockTouchScroll = (event: TouchEvent) => {
       const target = event.target;
-      if (target instanceof Element && target.closest(".mobile-sensitivity, .mobile-exit-fullscreen")) {
+      if (target instanceof Element && target.closest(".mobile-header, .mobile-exit-fullscreen, .mobile-browser-hint")) {
         return;
       }
       event.preventDefault();
@@ -47,11 +52,26 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
   }, []);
 
   useEffect(() => {
-    const onFullscreenChange = () => {
-      setIsFullscreen(document.fullscreenElement === controlsRef.current);
+    const syncFullscreen = () => {
+      const active = document.fullscreenElement === mobileViewRef.current;
+      setIsFullscreen(active);
+      setShowBrowserHint(shouldShowBrowserHint(active) && isLandscapePhone());
     };
-    document.addEventListener("fullscreenchange", onFullscreenChange);
-    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+
+    const syncLayout = () => {
+      syncFullscreen();
+    };
+
+    syncLayout();
+    document.addEventListener("fullscreenchange", syncFullscreen);
+    window.addEventListener("orientationchange", syncLayout);
+    window.addEventListener("resize", syncLayout);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", syncFullscreen);
+      window.removeEventListener("orientationchange", syncLayout);
+      window.removeEventListener("resize", syncLayout);
+    };
   }, []);
 
   useEffect(() => {
@@ -66,9 +86,12 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
 
   const handleKeyDown = useCallback((key: string) => client.keyDown(key), []);
   const handleKeyUp = useCallback((key: string) => client.keyUp(key), []);
-  const handleMove = useCallback((dx: number, dy: number) => {
-    client.moveMouseRelative(dx, dy);
-  }, []);
+  const handleMove = useCallback(
+    (dx: number, dy: number) => {
+      client.moveMouseRelative(dx, dy, mouseMode === "relative");
+    },
+    [mouseMode],
+  );
   const handleClick = useCallback((button: "left" | "right") => {
     client.mouseClick(button);
   }, []);
@@ -81,58 +104,54 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
     storeMouseSensitivity(value);
   };
 
+  const handleMouseModeChange = (next: MouseMode) => {
+    setMouseMode(next);
+    storeMouseMode(next);
+  };
+
   const handleToggleFullscreen = async () => {
-    if (!controlsRef.current) return;
-    const active = await toggleFullscreen(controlsRef.current);
+    if (!mobileViewRef.current) return;
+    const active = await toggleFullscreen(mobileViewRef.current);
     setIsFullscreen(active);
+    setShowBrowserHint(shouldShowBrowserHint(active) && isLandscapePhone());
   };
 
   return (
-    <div className={`mobile-view${isFullscreen ? " mobile-view-controls-fullscreen" : ""}`}>
+    <div
+      ref={mobileViewRef}
+      className={`mobile-view${isFullscreen ? " mobile-view-fullscreen" : ""}`}
+    >
       {!isFullscreen && (
         <>
-          <header className="toolbar mobile-toolbar">
-            <HostLabel />
-            <span className={`status status-${connectionState}`}>{connectionState}</span>
-            <div className="toolbar-actions">
-              <button type="button" onClick={() => void handleToggleFullscreen()}>
-                Fullscreen
-              </button>
-              <button type="button" onClick={() => onViewModeChange("desktop")}>
-                Desktop
-              </button>
-              <button type="button" onClick={onLogout}>
-                Logout
-              </button>
-            </div>
-          </header>
-          {error && <p className="banner error">{error}</p>}
-          <div className="mobile-sensitivity">
-            <label className="mobile-sensitivity-label" htmlFor="mouse-sensitivity">
-              Mouse
-            </label>
-            <input
-              id="mouse-sensitivity"
-              className="mobile-sensitivity-slider"
-              type="range"
-              min={MIN_MOUSE_SENSITIVITY}
-              max={MAX_MOUSE_SENSITIVITY}
-              step={0.1}
-              value={mouseSensitivity}
-              onChange={(e) => handleSensitivityChange(Number.parseFloat(e.target.value))}
+          <MobileHeader
+            connectionState={connectionState}
+            mouseSensitivity={mouseSensitivity}
+            mouseMode={mouseMode}
+            minSensitivity={MIN_MOUSE_SENSITIVITY}
+            maxSensitivity={MAX_MOUSE_SENSITIVITY}
+            onSensitivityChange={handleSensitivityChange}
+            onMouseModeChange={handleMouseModeChange}
+            onFullscreen={() => void handleToggleFullscreen()}
+            onDesktopLayout={() => onViewModeChange("desktop")}
+            onLogout={onLogout}
+          />
+          {showBrowserHint && (
+            <MobileBrowserHint
+              onExpand={() => void handleToggleFullscreen()}
+              onDismiss={() => setShowBrowserHint(false)}
             />
-            <span className="mobile-sensitivity-value">{mouseSensitivity.toFixed(1)}×</span>
-          </div>
+          )}
+          {error && <p className="banner error mobile-banner">{error}</p>}
         </>
       )}
-      <div ref={controlsRef} className="mobile-controls">
+      <div className="mobile-controls">
         {isFullscreen && (
           <button
             type="button"
             className="mobile-exit-fullscreen"
             onClick={() => void handleToggleFullscreen()}
           >
-            Exit
+            Exit fullscreen
           </button>
         )}
         <div className="control-panel left-panel">
@@ -144,6 +163,7 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
             onScroll={handleScroll}
             onClick={handleClick}
             sensitivity={mouseSensitivity}
+            gameMode={mouseMode === "relative"}
           />
         </div>
       </div>

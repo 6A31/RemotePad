@@ -9,6 +9,11 @@ export type MouseButton = z.infer<typeof MouseButtonSchema>;
 export const StreamQualitySchema = z.enum(["low", "medium", "high"]);
 export type StreamQuality = z.infer<typeof StreamQualitySchema>;
 
+/** Upper bound for client-requested stream width (abuse / memory guard). */
+export const MAX_STREAM_MAX_WIDTH = 8192;
+
+const StreamMaxWidthSchema = z.number().int().positive().max(MAX_STREAM_MAX_WIDTH);
+
 export const ClientMessageSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("auth"),
@@ -18,16 +23,19 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("stream.start"),
     quality: StreamQualitySchema.optional(),
+    maxWidth: StreamMaxWidthSchema.optional(),
   }),
   z.object({ type: z.literal("stream.stop") }),
   z.object({
     type: z.literal("stream.setQuality"),
     quality: StreamQualitySchema,
+    maxWidth: StreamMaxWidthSchema.optional(),
   }),
   z.object({
     type: z.literal("mouse.move"),
     dx: z.number(),
     dy: z.number(),
+    game: z.boolean().optional(),
   }),
   z.object({
     type: z.literal("mouse.moveAbs"),
@@ -82,6 +90,11 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
     type: z.literal("error"),
     message: z.string(),
   }),
+  z.object({
+    type: z.literal("stream.warn"),
+    message: z.string(),
+  }),
+  z.object({ type: z.literal("stream.ok") }),
 ]);
 
 export type ServerMessage = z.infer<typeof ServerMessageSchema>;
@@ -102,6 +115,8 @@ export type LoginResponse = z.infer<typeof LoginResponseSchema>;
 export const HostInfoSchema = z.object({
   hostname: z.string(),
   port: z.number(),
+  displayWidth: z.number(),
+  displayHeight: z.number(),
 });
 
 export type HostInfo = z.infer<typeof HostInfoSchema>;

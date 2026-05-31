@@ -1,8 +1,16 @@
+import type { StreamQuality } from "@remotepad/protocol";
 import type { FramePayload, ScreenCaptureLike } from "../src/capture/screen.js";
 
 export class MockScreenCapture implements ScreenCaptureLike {
   subscriberCount = 0;
   frameSent = false;
+  lastQuality: StreamQuality | null = null;
+  lastMaxWidth: number | undefined;
+
+  setQuality(quality: StreamQuality, clientMaxWidth?: number): void {
+    this.lastQuality = quality;
+    this.lastMaxWidth = clientMaxWidth;
+  }
 
   subscribe(listener: (frame: FramePayload) => void): () => void {
     this.subscriberCount += 1;

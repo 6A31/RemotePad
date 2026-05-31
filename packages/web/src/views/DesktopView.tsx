@@ -6,12 +6,19 @@ import { client, type ConnectionState } from "../ws/client";
 import { mapCanvasCoords, toggleFullscreen } from "../lib/screenUtils";
 import { keyboardEventToProtocolKey } from "../lib/keyUtils";
 import { getStoredQuality, storeQuality } from "../lib/streamQuality";
+import { getStoredMouseMode, storeMouseMode, type MouseMode } from "../lib/mouseMode";
+import { getStoredMouseSensitivity } from "../lib/mouseSensitivity";
 import type { ViewMode } from "../App";
 
 const QUALITY_OPTIONS: { value: StreamQuality; label: string }[] = [
   { value: "low", label: "Low" },
   { value: "medium", label: "Medium" },
   { value: "high", label: "High" },
+];
+
+const MOUSE_MODE_OPTIONS: { value: MouseMode; label: string }[] = [
+  { value: "absolute", label: "Desktop" },
+  { value: "relative", label: "Game" },
 ];
 
 interface DesktopViewProps {
@@ -22,10 +29,14 @@ interface DesktopViewProps {
 export function DesktopView({ onLogout, onViewModeChange }: DesktopViewProps) {
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const [error, setError] = useState<string | null>(null);
+  const [bandwidthWarning, setBandwidthWarning] = useState<string | null>(null);
   const [quality, setQuality] = useState<StreamQuality>(getStoredQuality);
+  const [mouseMode, setMouseMode] = useState<MouseMode>(getStoredMouseMode);
+  const [mouseSensitivity] = useState(getStoredMouseSensitivity);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [inputCaptured, setInputCaptured] = useState(false);
   const pressedKeysRef = useRef(new Set<string>());
+  const lastMouseRef = useRef<{ x: number; y: number } | null>(null);
   const [frame, setFrame] = useState<{
     jpeg: Uint8Array;
     width: number;
@@ -44,6 +55,7 @@ export function DesktopView({ onLogout, onViewModeChange }: DesktopViewProps) {
   useEffect(() => {
     client.onConnectionState(setConnectionState);
     client.onConnectionError(setError);
+    client.onBandwidthWarning(setBandwidthWarning);
     client.onFrame((f) =>
       setFrame({
         jpeg: f.jpeg,
@@ -83,9 +95,16 @@ export function DesktopView({ onLogout, onViewModeChange }: DesktopViewProps) {
   useEffect(() => {
     const onFullscreenChange = () => {
       setIsFullscreen(document.fullscreenElement === viewportRef.current);
+      client.updateStreamDisplayLimit();
     };
     document.addEventListener("fullscreenchange", onFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    const onResize = () => client.updateStreamDisplayLimit();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
   const releaseCapturedKeys = useCallback(() => {
@@ -97,6 +116,7 @@ export function DesktopView({ onLogout, onViewModeChange }: DesktopViewProps) {
 
   const releaseInputCapture = useCallback(() => {
     releaseCapturedKeys();
+    lastMouseRef.current = null;
     setInputCaptured(false);
     viewportRef.current?.blur();
   }, [releaseCapturedKeys]);
@@ -116,19 +136,36 @@ export function DesktopView({ onLogout, onViewModeChange }: DesktopViewProps) {
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
+      if (mouseMode === "relative") {
+        if (!inputCaptured) return;
+        if (!lastMouseRef.current) {
+          lastMouseRef.current = { x: e.clientX, y: e.clientY };
+          return;
+        }
+        const dx = (e.clientX - lastMouseRef.current.x) * mouseSensitivity;
+        const dy = (e.clientY - lastMouseRef.current.y) * mouseSensitivity;
+        lastMouseRef.current = { x: e.clientX, y: e.clientY };
+        if (dx !== 0 || dy !== 0) client.moveMouseRelative(dx, dy, true);
+        return;
+      }
+
       const coords = mapCoords(e.clientX, e.clientY);
       if (coords) client.moveMouseAbsolute(coords.x, coords.y);
     },
-    [mapCoords],
+    [inputCaptured, mapCoords, mouseMode, mouseSensitivity],
   );
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    viewportRef.current?.focus();
-    setInputCaptured(true);
-    const button = e.button === 2 ? "right" : e.button === 1 ? "middle" : "left";
-    client.mouseDown(button);
-  }, []);
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      viewportRef.current?.focus();
+      setInputCaptured(true);
+      lastMouseRef.current = { x: e.clientX, y: e.clientY };
+      const button = e.button === 2 ? "right" : e.button === 1 ? "middle" : "left";
+      client.mouseDown(button);
+    },
+    [],
+  );
 
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
     const button = e.button === 2 ? "right" : e.button === 1 ? "middle" : "left";
@@ -143,13 +180,17 @@ export function DesktopView({ onLogout, onViewModeChange }: DesktopViewProps) {
     (e: React.MouseEvent) => {
       viewportRef.current?.focus();
       setInputCaptured(true);
+      if (mouseMode === "relative") {
+        client.mouseClick(e.button === 2 ? "right" : "left");
+        return;
+      }
       const coords = mapCoords(e.clientX, e.clientY);
       if (coords) {
         client.moveMouseAbsolute(coords.x, coords.y);
         client.mouseClick(e.button === 2 ? "right" : "left");
       }
     },
-    [mapCoords],
+    [mapCoords, mouseMode],
   );
 
   const handleKeyDown = useCallback(
@@ -185,6 +226,7 @@ export function DesktopView({ onLogout, onViewModeChange }: DesktopViewProps) {
 
   const handleViewportBlur = useCallback(() => {
     releaseCapturedKeys();
+    lastMouseRef.current = null;
     setInputCaptured(false);
   }, [releaseCapturedKeys]);
 
@@ -196,6 +238,12 @@ export function DesktopView({ onLogout, onViewModeChange }: DesktopViewProps) {
       client.stopStream();
       client.startStream();
     }
+  };
+
+  const handleMouseModeChange = (next: MouseMode) => {
+    setMouseMode(next);
+    storeMouseMode(next);
+    releaseInputCapture();
   };
 
   const handleFullscreen = async () => {
@@ -210,6 +258,22 @@ export function DesktopView({ onLogout, onViewModeChange }: DesktopViewProps) {
         <HostLabel />
         <span className={`status status-${connectionState}`}>{connectionState}</span>
         <div className="toolbar-actions">
+          <div className="quality-control">
+            <span className="quality-label">Mouse</span>
+            <div className="segmented-control" role="group" aria-label="Mouse mode">
+              {MOUSE_MODE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={mouseMode === option.value ? "active" : undefined}
+                  aria-pressed={mouseMode === option.value}
+                  onClick={() => handleMouseModeChange(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="quality-control">
             <span className="quality-label">Quality</span>
             <div className="segmented-control" role="group" aria-label="Stream quality">
@@ -238,20 +302,26 @@ export function DesktopView({ onLogout, onViewModeChange }: DesktopViewProps) {
         </div>
       </header>
       {error && <p className="banner error">{error}</p>}
+      {bandwidthWarning && !error && <p className="banner warning">{bandwidthWarning}</p>}
       <div
         ref={viewportRef}
-        className={`screen-viewport${inputCaptured ? " screen-viewport-captured" : ""}`}
+        className={`screen-viewport${inputCaptured ? " screen-viewport-captured" : ""}${mouseMode === "relative" ? " screen-viewport-game" : ""}`}
         tabIndex={0}
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
         onBlur={handleViewportBlur}
       >
         {!inputCaptured && (
-          <p className="screen-viewport-hint">Click the screen to control keyboard and mouse</p>
+          <p className="screen-viewport-hint">
+            {mouseMode === "relative"
+              ? "Click the screen for game mode (relative mouse). Esc to release."
+              : "Click the screen to control keyboard and mouse"}
+          </p>
         )}
         <ScreenCanvas
           ref={canvasRef}
           frame={frame}
+          className={mouseMode === "relative" && inputCaptured ? "screen-canvas screen-canvas-game" : "screen-canvas"}
           onMouseMove={handleMouseMove}
           onMouseDown={handleMouseDown}
           onMouseUp={handleMouseUp}

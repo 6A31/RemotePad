@@ -8,18 +8,11 @@ interface WasdKnobProps {
 const DEAD_ZONE = 0.15;
 
 function keysFromOffset(nx: number, ny: number): string[] {
-  const magnitude = Math.hypot(nx, ny);
-  if (magnitude < DEAD_ZONE) return [];
-
-  const angle = Math.atan2(ny, nx);
-  const deg = ((angle * 180) / Math.PI + 360) % 360;
-
   const keys: string[] = [];
-  if (deg >= 315 || deg < 45) keys.push("d");
-  if (deg >= 45 && deg < 135) keys.push("s");
-  if (deg >= 135 && deg < 225) keys.push("a");
-  if (deg >= 225 && deg < 315) keys.push("w");
-
+  if (ny < -DEAD_ZONE) keys.push("w");
+  if (ny > DEAD_ZONE) keys.push("s");
+  if (nx < -DEAD_ZONE) keys.push("a");
+  if (nx > DEAD_ZONE) keys.push("d");
   return keys;
 }
 

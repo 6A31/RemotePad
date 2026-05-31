@@ -151,7 +151,7 @@ describe("security", () => {
       const res = await app.inject({ method: "GET", url: "/api/info" });
       assert.equal(res.statusCode, 200);
       const body = res.json();
-      assert.deepEqual(Object.keys(body).sort(), ["hostname", "port"]);
+      assert.deepEqual(Object.keys(body).sort(), ["displayHeight", "displayWidth", "hostname", "port"]);
       assert.equal(body.port, config.port);
       assert.ok(typeof body.hostname === "string");
     });
@@ -260,8 +260,10 @@ describe("security", () => {
   describe("WebSocket actions without auth", () => {
     const blockedMessages = [
       { type: "stream.start" },
+      { type: "stream.start", maxWidth: 1920 },
       { type: "stream.stop" },
       { type: "stream.setQuality", quality: "high" },
+      { type: "stream.setQuality", quality: "high", maxWidth: 1920 },
       { type: "mouse.move", dx: 1, dy: 1 },
       { type: "mouse.moveAbs", x: 10, y: 10 },
       { type: "mouse.click", button: "left" },
@@ -325,6 +327,44 @@ describe("security", () => {
       assert.equal(screen.subscriberCount, 1);
       await closeWs(ws);
     });
+
+    it("applies client maxWidth on stream.start after auth", async () => {
+      const ws = await authedWs();
+      ws.send(JSON.stringify({ type: "stream.start", quality: "high", maxWidth: 800 }));
+      const frame = (await waitForMessage(ws)) as { type: string };
+      assert.equal(frame.type, "frame");
+      assert.equal(screen.lastQuality, "high");
+      assert.equal(screen.lastMaxWidth, 800);
+      await closeWs(ws);
+    });
+
+    it("applies client maxWidth on stream.setQuality after auth", async () => {
+      const ws = await authedWs();
+      ws.send(JSON.stringify({ type: "stream.start" }));
+      await waitForMessage(ws);
+      ws.send(JSON.stringify({ type: "stream.setQuality", quality: "low", maxWidth: 640 }));
+      await new Promise((r) => setTimeout(r, 50));
+      assert.equal(screen.lastQuality, "low");
+      assert.equal(screen.lastMaxWidth, 640);
+      await closeWs(ws);
+    });
+
+    for (const payload of [
+      { type: "stream.start", maxWidth: 0 },
+      { type: "stream.start", maxWidth: -100 },
+      { type: "stream.start", maxWidth: 99999 },
+      { type: "stream.setQuality", quality: "high", maxWidth: 0 },
+      { type: "stream.setQuality", quality: "high", maxWidth: 99999 },
+    ] as const) {
+      it(`rejects invalid maxWidth: ${JSON.stringify(payload)}`, async () => {
+        const ws = await authedWs();
+        ws.send(JSON.stringify(payload));
+        const msg = (await waitForMessage(ws)) as { type: string; message?: string };
+        assert.equal(msg.type, "error");
+        assert.equal(msg.message, "Invalid message");
+        await closeWs(ws);
+      });
+    }
 
     it("still rejects invalid messages after auth", async () => {
       const ws = await authedWs();

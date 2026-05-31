@@ -5,6 +5,7 @@ interface TouchpadProps {
   onScroll: (dx: number, dy: number) => void;
   onClick: (button: "left" | "right") => void;
   sensitivity?: number;
+  gameMode?: boolean;
 }
 
 const LONG_PRESS_MS = 500;
@@ -19,7 +20,7 @@ function centroid(pointers: Map<number, { x: number; y: number }>): { x: number;
   return { x: x / pointers.size, y: y / pointers.size };
 }
 
-export function Touchpad({ onMove, onScroll, onClick, sensitivity = 1.5 }: TouchpadProps) {
+export function Touchpad({ onMove, onScroll, onClick, sensitivity = 1.5, gameMode = false }: TouchpadProps) {
   const sensitivityRef = useRef(sensitivity);
   sensitivityRef.current = sensitivity;
 
@@ -96,7 +97,7 @@ export function Touchpad({ onMove, onScroll, onClick, sensitivity = 1.5 }: Touch
     const dx = (e.clientX - lastPosRef.current.x) * scale;
     const dy = (e.clientY - lastPosRef.current.y) * scale;
 
-    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+    if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
       movedRef.current = true;
       clearLongPress();
       onMove(dx, dy);
@@ -151,7 +152,9 @@ export function Touchpad({ onMove, onScroll, onClick, sensitivity = 1.5 }: Touch
       onPointerCancel={handlePointerUp}
     >
       <span className="touchpad-hint">
-        One finger: move, tap, hold. Two fingers: scroll.
+        {gameMode
+          ? "Game: swipe to move camera. Tap/hold click. Two fingers scroll."
+          : "Swipe to move pointer. Tap/hold click. Two fingers scroll."}
       </span>
     </div>
   );

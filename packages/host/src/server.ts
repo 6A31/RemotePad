@@ -28,7 +28,13 @@ import {
 import { issueToken, verifyPassword, verifyToken } from "./security/auth.js";
 import { isPrivateOrLocalIp, rejectReason } from "./security/ip-filter.js";
 import { registerInfoRoute } from "./routes/info.js";
-import { frameToBinaryPacket, shouldSendFrame } from "./stream/frame-sender.js";
+import {
+  canSendFrame,
+  createFrameSendGuard,
+  frameToBinaryPacket,
+  resetFrameSendGuard,
+  type FrameSendGuard,
+} from "./stream/frame-sender.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -106,6 +112,7 @@ async function handleClientMessage(
     streaming: boolean;
     unsubscribe: (() => void) | null;
     screen: ScreenCaptureLike;
+    frameSendGuard: FrameSendGuard;
   },
 ): Promise<{ authenticated?: boolean; streaming?: boolean; unsubscribe?: (() => void) | null }> {
   if (message.type === "auth") {
@@ -119,30 +126,52 @@ async function handleClientMessage(
 
   switch (message.type) {
     case "stream.start": {
-      if (message.quality && "setQuality" in ctx.screen && typeof ctx.screen.setQuality === "function") {
-        ctx.screen.setQuality(message.quality);
+      if ("setQuality" in ctx.screen && typeof ctx.screen.setQuality === "function") {
+        ctx.screen.setQuality(message.quality ?? "medium", message.maxWidth);
       }
       if (ctx.unsubscribe) {
         ctx.unsubscribe();
       }
+      resetFrameSendGuard(ctx.frameSendGuard);
       const unsubscribe = ctx.screen.subscribe((frame) => {
-        if (!shouldSendFrame(socket, socket.OPEN)) return;
+        if (
+          !canSendFrame(
+            socket,
+            socket.OPEN,
+            ctx.frameSendGuard,
+            () => {
+              socket.send(
+                JSON.stringify({
+                  type: "stream.warn",
+                  message:
+                    "Network is falling behind — frames are backing up. Try lowering quality or check your connection.",
+                }),
+              );
+            },
+            () => {
+              socket.send(JSON.stringify({ type: "stream.ok" }));
+            },
+          )
+        ) {
+          return;
+        }
         socket.send(frameToBinaryPacket(frame));
       });
       return { streaming: true, unsubscribe };
     }
     case "stream.stop": {
       ctx.unsubscribe?.();
+      resetFrameSendGuard(ctx.frameSendGuard);
       return { streaming: false, unsubscribe: null };
     }
     case "stream.setQuality": {
       if ("setQuality" in ctx.screen && typeof ctx.screen.setQuality === "function") {
-        ctx.screen.setQuality(message.quality);
+        ctx.screen.setQuality(message.quality, message.maxWidth);
       }
       break;
     }
     case "mouse.move":
-      await moveMouseRelative(message.dx, message.dy);
+      await moveMouseRelative(message.dx, message.dy, message.game ?? false);
       break;
     case "mouse.moveAbs":
       await moveMouseAbsolute(message.x, message.y);
@@ -227,6 +256,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     let authenticated = false;
     let streaming = false;
     let unsubscribe: (() => void) | null = null;
+    const frameSendGuard = createFrameSendGuard();
 
     const authTimer = setTimeout(() => {
       if (!authenticated) {
@@ -276,6 +306,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
           streaming,
           unsubscribe,
           screen,
+          frameSendGuard,
         });
 
         if (result.authenticated !== undefined) authenticated = result.authenticated;

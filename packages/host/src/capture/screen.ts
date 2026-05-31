@@ -1,6 +1,6 @@
 import { Monitor } from "node-screenshots";
 import sharp from "sharp";
-import type { StreamQuality } from "@remotepad/protocol";
+import { MAX_STREAM_MAX_WIDTH, type StreamQuality } from "@remotepad/protocol";
 import { getPrimaryMonitorInfo } from "./monitor-info.js";
 
 export interface QualitySettings {
@@ -10,10 +10,23 @@ export interface QualitySettings {
 }
 
 export const QUALITY_PRESETS: Record<StreamQuality, QualitySettings> = {
-  low: { maxWidth: 960, jpegQuality: 45, fps: 12 },
-  medium: { maxWidth: 1280, jpegQuality: 60, fps: 18 },
-  high: { maxWidth: 1920, jpegQuality: 80, fps: 24 },
+  low: { maxWidth: 1280, jpegQuality: 55, fps: 24 },
+  medium: { maxWidth: 1920, jpegQuality: 72, fps: 30 },
+  high: { maxWidth: 2560, jpegQuality: 85, fps: 45 },
 };
+
+export function resolveStreamSettings(
+  quality: StreamQuality,
+  clientMaxWidth?: number,
+): QualitySettings {
+  const preset = QUALITY_PRESETS[quality];
+  if (!clientMaxWidth) return preset;
+  const capped = Math.min(Math.round(clientMaxWidth), MAX_STREAM_MAX_WIDTH);
+  return {
+    ...preset,
+    maxWidth: Math.min(preset.maxWidth, capped),
+  };
+}
 
 export interface FramePayload {
   jpeg: Buffer;
@@ -28,7 +41,7 @@ type FrameListener = (frame: FramePayload) => void;
 
 export interface ScreenCaptureLike {
   subscribe(listener: (frame: FramePayload) => void): () => void;
-  setQuality?(quality: StreamQuality): void;
+  setQuality?(quality: StreamQuality, clientMaxWidth?: number): void;
 }
 
 export class ScreenCapture implements ScreenCaptureLike {
@@ -36,7 +49,9 @@ export class ScreenCapture implements ScreenCaptureLike {
   private timer: NodeJS.Timeout | null = null;
   private seq = 0;
   private monitor: Monitor | null = null;
-  private settings: QualitySettings = QUALITY_PRESETS.medium;
+  private quality: StreamQuality = "medium";
+  private clientMaxWidth: number | undefined;
+  private settings: QualitySettings = resolveStreamSettings("medium");
   private inFlight = false;
 
   subscribe(listener: FrameListener): () => void {
@@ -50,8 +65,12 @@ export class ScreenCapture implements ScreenCaptureLike {
     };
   }
 
-  setQuality(quality: StreamQuality): void {
-    this.settings = QUALITY_PRESETS[quality];
+  setQuality(quality: StreamQuality, clientMaxWidth?: number): void {
+    this.quality = quality;
+    if (clientMaxWidth !== undefined) {
+      this.clientMaxWidth = clientMaxWidth;
+    }
+    this.settings = resolveStreamSettings(this.quality, this.clientMaxWidth);
     if (this.timer && this.subscribers.size > 0) {
       this.stopLoop();
       this.ensureLoop();

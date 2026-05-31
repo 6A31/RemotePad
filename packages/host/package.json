@@ -21,6 +21,7 @@
     "bcrypt": "^5.1.1",
     "fastify": "^5.2.1",
     "jsonwebtoken": "^9.0.2",
+    "koffi": "^3.0.2",
     "node-screenshots": "^0.2.1",
     "sharp": "^0.33.5",
     "systray2": "^2.1.4"
