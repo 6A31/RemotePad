@@ -267,6 +267,7 @@ describe("security", () => {
       { type: "mouse.click", button: "left" },
       { type: "mouse.down", button: "left" },
       { type: "mouse.up", button: "left" },
+      { type: "mouse.scroll", dx: 0, dy: 10 },
       { type: "key.down", key: "w" },
       { type: "key.up", key: "w" },
     ] as const;

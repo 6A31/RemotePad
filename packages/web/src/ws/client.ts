@@ -170,6 +170,10 @@ export class RemotePadClient {
     this.send({ type: "mouse.up", button });
   }
 
+  scrollMouse(dx: number, dy: number): void {
+    this.send({ type: "mouse.scroll", dx, dy });
+  }
+
   keyDown(key: string): void {
     this.send({ type: "key.down", key });
   }

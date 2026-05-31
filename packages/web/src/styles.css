@@ -470,6 +470,33 @@ label {
   min-height: 0;
   overflow: hidden;
   touch-action: none;
+  position: relative;
+}
+
+.mobile-controls:fullscreen {
+  width: 100%;
+  height: 100%;
+  background: #0f1117;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
+.mobile-view-controls-fullscreen {
+  background: #000;
+}
+
+.mobile-exit-fullscreen {
+  position: absolute;
+  top: max(0.5rem, env(safe-area-inset-top, 0px));
+  right: max(0.5rem, env(safe-area-inset-right, 0px));
+  z-index: 2;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.82rem;
+  background: rgba(23, 26, 33, 0.92);
+  border-color: #3c4048;
+  backdrop-filter: blur(8px);
 }
 
 .control-panel {
@@ -494,7 +521,7 @@ label {
 
 .wasd-knob {
   position: relative;
-  width: min(62vw, 62vh, 280px);
+  width: min(62vw, 62svh, 280px);
   aspect-ratio: 1;
   touch-action: none;
   flex-shrink: 0;
@@ -587,10 +614,20 @@ label {
   }
 
   .wasd-knob {
-    width: min(56vw, 36svh, 240px);
+    width: min(56vw, 32svh, 240px);
+  }
+
+  .mobile-controls:fullscreen .wasd-knob {
+    width: min(72vw, 44svh, 320px);
   }
 
   .touchpad-hint {
     font-size: 0.72rem;
+  }
+}
+
+@media (orientation: landscape) {
+  .mobile-controls:fullscreen .wasd-knob {
+    width: min(36vw, 78svh, 300px);
   }
 }

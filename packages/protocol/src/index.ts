@@ -47,6 +47,11 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
     button: MouseButtonSchema,
   }),
   z.object({
+    type: z.literal("mouse.scroll"),
+    dx: z.number(),
+    dy: z.number(),
+  }),
+  z.object({
     type: z.literal("key.down"),
     key: z.string(),
   }),

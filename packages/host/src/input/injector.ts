@@ -99,6 +99,22 @@ export async function mouseClick(button: MouseButton): Promise<void> {
   await mouse.click(toButton(button));
 }
 
+const SCROLL_PIXELS_PER_STEP = 12;
+
+export async function scrollMouse(dx: number, dy: number): Promise<void> {
+  const stepsY = Math.round(Math.abs(dy) / SCROLL_PIXELS_PER_STEP);
+  const stepsX = Math.round(Math.abs(dx) / SCROLL_PIXELS_PER_STEP);
+
+  if (stepsY >= 1) {
+    if (dy > 0) await mouse.scrollDown(stepsY);
+    else await mouse.scrollUp(stepsY);
+  }
+  if (stepsX >= 1) {
+    if (dx > 0) await mouse.scrollRight(stepsX);
+    else await mouse.scrollLeft(stepsX);
+  }
+}
+
 export async function keyDown(key: string): Promise<void> {
   const resolved = resolveKey(key);
   if (!resolved || heldKeys.has(resolved)) return;

@@ -23,6 +23,7 @@ import {
   moveMouseAbsolute,
   moveMouseRelative,
   releaseAllKeys,
+  scrollMouse,
 } from "./input/injector.js";
 import { issueToken, verifyPassword, verifyToken } from "./security/auth.js";
 import { isPrivateOrLocalIp, rejectReason } from "./security/ip-filter.js";
@@ -154,6 +155,9 @@ async function handleClientMessage(
       break;
     case "mouse.click":
       await mouseClick(message.button);
+      break;
+    case "mouse.scroll":
+      await scrollMouse(message.dx, message.dy);
       break;
     case "key.down":
       await keyDown(message.key);
