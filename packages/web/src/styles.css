@@ -819,8 +819,11 @@ label {
   bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
   z-index: 2;
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: flex-end;
   gap: 0.5rem;
+  max-width: calc(100% - 1.5rem);
 }
 
 .hold-key-button {
@@ -848,10 +851,117 @@ label {
   min-height: 4.25rem;
 }
 
+.mobile-icon-button {
+  min-width: 3.25rem;
+  min-height: 3.25rem;
+  padding: 0.45rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-icon-button:active {
+  transform: scale(0.96);
+}
+
 .roblox-key-button {
   min-width: 3.25rem;
   min-height: 3.25rem;
   font-size: 1rem;
+}
+
+.text-entry-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: max(0.75rem, env(safe-area-inset-bottom, 0px)) max(0.75rem, env(safe-area-inset-right, 0px))
+    max(0.75rem, env(safe-area-inset-bottom, 0px)) max(0.75rem, env(safe-area-inset-left, 0px));
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.text-entry-panel {
+  width: min(100%, 28rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.85rem;
+  border-radius: 12px;
+  border: 1px solid #2a2f3a;
+  background: #12151c;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+.text-entry-label {
+  font-size: 0.85rem;
+  color: #9ca3af;
+}
+
+.text-entry-input {
+  width: 100%;
+  padding: 0.75rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid #2a2f3a;
+  background: #0f1117;
+  color: #f3f4f6;
+  font-size: 1rem;
+}
+
+.text-entry-input:focus {
+  outline: none;
+  border-color: #4f8cff;
+}
+
+.text-entry-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.text-entry-send,
+.text-entry-abort {
+  flex: 1;
+  min-height: 2.75rem;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.text-entry-send {
+  border-color: #4f8cff;
+  background: rgba(79, 140, 255, 0.22);
+  color: #93c5fd;
+}
+
+.text-entry-abort {
+  border-color: #7f1d1d;
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
+.radial-selector-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.radial-selector {
+  position: fixed;
+  left: max(1rem, env(safe-area-inset-left, 0px));
+  bottom: max(5.5rem, calc(env(safe-area-inset-bottom, 0px) + 4.5rem));
+}
+
+.radial-key-button {
+  position: absolute;
+  min-width: 3rem;
+  min-height: 3rem;
+  padding: 0;
+  font-size: 1rem;
+}
+
+.radial-key-button:active {
+  transform: translate(-50%, -50%) scale(0.96);
 }
 
 .mobile-remote-cursor-layer {

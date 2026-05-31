@@ -6,6 +6,8 @@ interface MobileRemoteCursorProps {
   y: number;
   sourceWidth: number;
   sourceHeight: number;
+  imageWidth?: number;
+  imageHeight?: number;
   visible: boolean;
 }
 
@@ -14,10 +16,15 @@ export function MobileRemoteCursor({
   y,
   sourceWidth,
   sourceHeight,
+  imageWidth,
+  imageHeight,
   visible,
 }: MobileRemoteCursorProps) {
   const [containerRef, setContainerRef] = useState<HTMLDivElement | null>(null);
   const [position, setPosition] = useState<{ xPct: number; yPct: number } | null>(null);
+
+  const displayImageWidth = imageWidth ?? sourceWidth;
+  const displayImageHeight = imageHeight ?? sourceHeight;
 
   useEffect(() => {
     if (!containerRef || !visible) {
@@ -34,6 +41,8 @@ export function MobileRemoteCursor({
         sourceHeight,
         rect.width,
         rect.height,
+        displayImageWidth,
+        displayImageHeight,
       );
       setPosition(mapped);
     };
@@ -42,7 +51,7 @@ export function MobileRemoteCursor({
     const observer = new ResizeObserver(update);
     observer.observe(containerRef);
     return () => observer.disconnect();
-  }, [containerRef, visible, x, y, sourceWidth, sourceHeight]);
+  }, [containerRef, visible, x, y, sourceWidth, sourceHeight, displayImageWidth, displayImageHeight]);
 
   return (
     <div ref={setContainerRef} className="mobile-remote-cursor-layer" aria-hidden={!visible}>

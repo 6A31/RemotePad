@@ -50,17 +50,21 @@ export function mapSourceCoordsToContainer(
   sourceHeight: number,
   containerWidth: number,
   containerHeight: number,
+  imageWidth = sourceWidth,
+  imageHeight = sourceHeight,
 ): { xPct: number; yPct: number } | null {
   if (
     sourceWidth <= 0 ||
     sourceHeight <= 0 ||
     containerWidth <= 0 ||
-    containerHeight <= 0
+    containerHeight <= 0 ||
+    imageWidth <= 0 ||
+    imageHeight <= 0
   ) {
     return null;
   }
 
-  const imageAspect = sourceWidth / sourceHeight;
+  const imageAspect = imageWidth / imageHeight;
   const displayAspect = containerWidth / containerHeight;
 
   let renderWidth: number;

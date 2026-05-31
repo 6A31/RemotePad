@@ -11,6 +11,11 @@ import { ScreenCanvas } from "../components/ScreenCanvas";
 import { MobileHeader } from "../components/MobileHeader";
 import { MobileBrowserHint } from "../components/MobileBrowserHint";
 import { MobileRemoteCursor } from "../components/MobileRemoteCursor";
+import { TextEntryOverlay, type TextEntryVariant } from "../components/TextEntryOverlay";
+import { InventoryButton } from "../components/InventoryButton";
+import { EmoteButton } from "../components/EmoteButton";
+import { ChatIcon, TextEntryIcon } from "../components/MobileActionIcons";
+import { openRobloxChat } from "../lib/remoteTyping";
 import { client, type ConnectionState } from "../ws/client";
 import { useHostInfo } from "../hooks/useHostInfo";
 import { getStoredQuality } from "../lib/streamQuality";
@@ -24,6 +29,15 @@ import { toggleFullscreen } from "../lib/screenUtils";
 import { getStoredMouseMode, storeMouseMode, type MouseMode } from "../lib/mouseMode";
 import { isLandscapePhone, shouldShowBrowserHint } from "../lib/displayMode";
 import type { ViewMode } from "../App";
+
+/** Desktop touchpad moves slower than game mode — 1:1 finger pixels feel too fast on a full desktop. */
+const DESKTOP_POINTER_SCALE = 0.55;
+
+function releaseInventoryKeys(): void {
+  for (let i = 0; i <= 9; i++) {
+    client.keyUp(String(i));
+  }
+}
 
 interface MobileViewProps {
   onLogout: () => void;
@@ -49,20 +63,28 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
     sourceHeight: number;
   } | null>(null);
   const [cursor, setCursor] = useState({ x: 0, y: 0 });
+  const [textEntryVariant, setTextEntryVariant] = useState<TextEntryVariant | null>(null);
   const mobileViewRef = useRef<HTMLDivElement>(null);
 
   const sourceWidth = frame?.sourceWidth ?? hostInfo?.displayWidth ?? 1920;
   const sourceHeight = frame?.sourceHeight ?? hostInfo?.displayHeight ?? 1080;
+  const streamWidth = frame?.width ?? sourceWidth;
+  const streamHeight = frame?.height ?? sourceHeight;
   const showDesktopCursor = mouseMode === "absolute";
 
   useEffect(() => {
-    setCursor({ x: sourceWidth / 2, y: sourceHeight / 2 });
+    if (mouseMode !== "absolute") return;
+    const x = sourceWidth / 2;
+    const y = sourceHeight / 2;
+    setCursor({ x, y });
+    client.moveMouseAbsolute(x, y);
   }, [sourceWidth, sourceHeight, mouseMode]);
 
   useEffect(() => {
     if (!robloxMode) {
-      client.keyUp("1");
       client.keyUp("q");
+      releaseInventoryKeys();
+      setTextEntryVariant((current) => (current === "roblox" ? null : current));
     }
   }, [robloxMode]);
 
@@ -74,8 +96,8 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
       document.documentElement.classList.remove("mobile-session");
       document.body.classList.remove("mobile-session");
       client.keyUp("space");
-      client.keyUp("1");
       client.keyUp("q");
+      releaseInventoryKeys();
     };
   }, []);
 
@@ -172,11 +194,16 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
         return;
       }
 
-      setCursor((current) => ({
-        x: Math.max(0, Math.min(sourceWidth, current.x + dx)),
-        y: Math.max(0, Math.min(sourceHeight, current.y + dy)),
-      }));
-      client.moveMouseRelative(dx, dy, false);
+      setCursor((current) => {
+        const scaledDx = dx * DESKTOP_POINTER_SCALE;
+        const scaledDy = dy * DESKTOP_POINTER_SCALE;
+        const next = {
+          x: Math.max(0, Math.min(sourceWidth, current.x + scaledDx)),
+          y: Math.max(0, Math.min(sourceHeight, current.y + scaledDy)),
+        };
+        client.moveMouseAbsolute(next.x, next.y);
+        return next;
+      });
     },
     [mouseMode, sourceWidth, sourceHeight],
   );
@@ -210,6 +237,15 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
     const active = await toggleFullscreen(mobileViewRef.current);
     setIsFullscreen(active);
     setShowBrowserHint(shouldShowBrowserHint(active) && isLandscapePhone());
+  };
+
+  const handleOpenRobloxChat = () => {
+    openRobloxChat();
+    setTextEntryVariant("roblox");
+  };
+
+  const handleOpenTextEntry = () => {
+    setTextEntryVariant("generic");
   };
 
   return (
@@ -253,6 +289,8 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
               y={cursor.y}
               sourceWidth={sourceWidth}
               sourceHeight={sourceHeight}
+              imageWidth={streamWidth}
+              imageHeight={streamHeight}
               visible={showDesktopCursor}
             />
           </div>
@@ -279,7 +317,7 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
         <div className="control-panel left-panel">
           <WasdKnob onKeyDown={handleKeyDown} onKeyUp={handleKeyUp} />
           <div className="mobile-action-buttons">
-            {robloxMode && (
+            {robloxMode ? (
               <>
                 <HoldKeyButton
                   label="Q"
@@ -288,14 +326,26 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
                   onPress={() => handleKeyDown("q")}
                   onRelease={() => handleKeyUp("q")}
                 />
-                <HoldKeyButton
-                  label="1"
-                  ariaLabel="1 key"
-                  className="hold-key-button roblox-key-button"
-                  onPress={() => handleKeyDown("1")}
-                  onRelease={() => handleKeyUp("1")}
-                />
+                <InventoryButton onKeyDown={handleKeyDown} onKeyUp={handleKeyUp} />
+                <EmoteButton onKeyDown={handleKeyDown} onKeyUp={handleKeyUp} />
+                <button
+                  type="button"
+                  className="hold-key-button mobile-icon-button"
+                  aria-label="Open chat"
+                  onClick={handleOpenRobloxChat}
+                >
+                  <ChatIcon />
+                </button>
               </>
+            ) : (
+              <button
+                type="button"
+                className="hold-key-button mobile-icon-button"
+                aria-label="Text entry"
+                onClick={handleOpenTextEntry}
+              >
+                <TextEntryIcon />
+              </button>
             )}
             <JumpButton onPress={handleJumpPress} onRelease={handleJumpRelease} />
           </div>
@@ -318,6 +368,9 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
           />
         </div>
       </div>
+      {textEntryVariant && (
+        <TextEntryOverlay variant={textEntryVariant} onClose={() => setTextEntryVariant(null)} />
+      )}
     </div>
   );
 }

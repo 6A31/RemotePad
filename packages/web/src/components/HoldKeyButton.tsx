@@ -1,9 +1,10 @@
-import { useRef } from "react";
+import { useRef, type CSSProperties } from "react";
 
 interface HoldKeyButtonProps {
   label: string;
   ariaLabel: string;
   className?: string;
+  style?: CSSProperties;
   onPress: () => void;
   onRelease: () => void;
 }
@@ -12,6 +13,7 @@ export function HoldKeyButton({
   label,
   ariaLabel,
   className,
+  style,
   onPress,
   onRelease,
 }: HoldKeyButtonProps) {
@@ -39,6 +41,7 @@ export function HoldKeyButton({
       type="button"
       className={className ?? "hold-key-button"}
       aria-label={ariaLabel}
+      style={style}
       onPointerDown={(e) => {
         e.preventDefault();
         if (pressedRef.current) return;
