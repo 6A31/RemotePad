@@ -946,10 +946,48 @@ label {
   background: rgba(0, 0, 0, 0.35);
 }
 
-.radial-selector {
+.radial-selector-panel {
   position: fixed;
   left: max(1rem, env(safe-area-inset-left, 0px));
   bottom: max(5.5rem, calc(env(safe-area-inset-bottom, 0px) + 4.5rem));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.radial-mode-toggle {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.25rem;
+  border-radius: 999px;
+  border: 1px solid #2a2f3a;
+  background: rgba(18, 21, 28, 0.95);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.radial-mode-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.25rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border-color: transparent;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.radial-mode-toggle button.active {
+  border-color: #4f8cff;
+  background: rgba(79, 140, 255, 0.2);
+  color: #93c5fd;
+}
+
+.radial-selector {
+  position: relative;
 }
 
 .radial-key-button {
@@ -962,6 +1000,19 @@ label {
 
 .radial-key-button:active {
   transform: translate(-50%, -50%) scale(0.96);
+}
+
+.radial-key-button-disabled {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid #2a2f3a;
+  background: rgba(15, 17, 23, 0.55);
+  color: #4b5563;
+  opacity: 0.55;
+  pointer-events: none;
+  user-select: none;
 }
 
 .mobile-remote-cursor-layer {

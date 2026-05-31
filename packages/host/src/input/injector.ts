@@ -106,11 +106,18 @@ export async function mouseClick(button: MouseButton): Promise<void> {
   await mouse.click(toButton(button));
 }
 
-const SCROLL_PIXELS_PER_STEP = 12;
+const SCROLL_PIXELS_PER_STEP = 5;
+const MAX_SCROLL_STEPS_PER_MESSAGE = 30;
 
 export async function scrollMouse(dx: number, dy: number): Promise<void> {
-  const stepsY = Math.round(Math.abs(dy) / SCROLL_PIXELS_PER_STEP);
-  const stepsX = Math.round(Math.abs(dx) / SCROLL_PIXELS_PER_STEP);
+  const stepsY = Math.min(
+    MAX_SCROLL_STEPS_PER_MESSAGE,
+    Math.ceil(Math.abs(dy) / SCROLL_PIXELS_PER_STEP),
+  );
+  const stepsX = Math.min(
+    MAX_SCROLL_STEPS_PER_MESSAGE,
+    Math.ceil(Math.abs(dx) / SCROLL_PIXELS_PER_STEP),
+  );
 
   if (stepsY >= 1) {
     if (dy > 0) await mouse.scrollDown(stepsY);

@@ -13,8 +13,7 @@ import { MobileBrowserHint } from "../components/MobileBrowserHint";
 import { MobileRemoteCursor } from "../components/MobileRemoteCursor";
 import { TextEntryOverlay, type TextEntryVariant } from "../components/TextEntryOverlay";
 import { InventoryButton } from "../components/InventoryButton";
-import { EmoteButton } from "../components/EmoteButton";
-import { ChatIcon, TextEntryIcon } from "../components/MobileActionIcons";
+import { MessageSquare, Keyboard } from "lucide-react";
 import { openRobloxChat } from "../lib/remoteTyping";
 import { client, type ConnectionState } from "../ws/client";
 import { useHostInfo } from "../hooks/useHostInfo";
@@ -327,14 +326,13 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
                   onRelease={() => handleKeyUp("q")}
                 />
                 <InventoryButton onKeyDown={handleKeyDown} onKeyUp={handleKeyUp} />
-                <EmoteButton onKeyDown={handleKeyDown} onKeyUp={handleKeyUp} />
                 <button
                   type="button"
                   className="hold-key-button mobile-icon-button"
                   aria-label="Open chat"
                   onClick={handleOpenRobloxChat}
                 >
-                  <ChatIcon />
+                  <MessageSquare size={22} strokeWidth={2} aria-hidden="true" />
                 </button>
               </>
             ) : (
@@ -344,7 +342,7 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
                 aria-label="Text entry"
                 onClick={handleOpenTextEntry}
               >
-                <TextEntryIcon />
+                <Keyboard size={22} strokeWidth={2} aria-hidden="true" />
               </button>
             )}
             <JumpButton onPress={handleJumpPress} onRelease={handleJumpRelease} />
@@ -363,6 +361,7 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
             onScroll={handleScroll}
             onClick={handleClick}
             onMoveEnd={() => client.flushGameMouse()}
+            onScrollEnd={() => client.flushScroll()}
             sensitivity={mouseSensitivity}
             gameMode={mouseMode === "relative"}
           />

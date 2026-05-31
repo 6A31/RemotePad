@@ -38,6 +38,9 @@ export class RemotePadClient {
   private pendingGameMouseDx = 0;
   private pendingGameMouseDy = 0;
   private gameMouseFlushScheduled = false;
+  private pendingScrollDx = 0;
+  private pendingScrollDy = 0;
+  private scrollFlushScheduled = false;
 
   setToken(token: string): void {
     this.token = token;
@@ -330,6 +333,28 @@ export class RemotePadClient {
   }
 
   scrollMouse(dx: number, dy: number): void {
+    this.pendingScrollDx += dx;
+    this.pendingScrollDy += dy;
+    this.scheduleScrollFlush();
+  }
+
+  private scheduleScrollFlush(): void {
+    if (this.scrollFlushScheduled) return;
+    this.scrollFlushScheduled = true;
+
+    requestAnimationFrame(() => {
+      this.scrollFlushScheduled = false;
+      this.flushScroll();
+    });
+  }
+
+  flushScroll(): void {
+    const dx = this.pendingScrollDx;
+    const dy = this.pendingScrollDy;
+    if (dx === 0 && dy === 0) return;
+
+    this.pendingScrollDx = 0;
+    this.pendingScrollDy = 0;
     this.send({ type: "mouse.scroll", dx, dy });
   }
 

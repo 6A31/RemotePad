@@ -5,11 +5,14 @@ interface TouchpadProps {
   onScroll: (dx: number, dy: number) => void;
   onClick: (button: "left" | "right") => void;
   onMoveEnd?: () => void;
+  onScrollEnd?: () => void;
   sensitivity?: number;
   gameMode?: boolean;
 }
 
 const LONG_PRESS_MS = 500;
+/** Two-finger scroll uses a higher gain than pointer movement — small per-frame deltas add up poorly otherwise. */
+const SCROLL_SCALE = 2.75;
 
 function centroid(pointers: Map<number, { x: number; y: number }>): { x: number; y: number } {
   let x = 0;
@@ -21,7 +24,15 @@ function centroid(pointers: Map<number, { x: number; y: number }>): { x: number;
   return { x: x / pointers.size, y: y / pointers.size };
 }
 
-export function Touchpad({ onMove, onScroll, onClick, onMoveEnd, sensitivity = 1.5, gameMode = false }: TouchpadProps) {
+export function Touchpad({
+  onMove,
+  onScroll,
+  onClick,
+  onMoveEnd,
+  onScrollEnd,
+  sensitivity = 1.5,
+  gameMode = false,
+}: TouchpadProps) {
   const sensitivityRef = useRef(sensitivity);
   sensitivityRef.current = sensitivity;
 
@@ -85,9 +96,9 @@ export function Touchpad({ onMove, onScroll, onClick, onMoveEnd, sensitivity = 1
 
       if (!prevCentroid) return;
 
-      const dx = (nextCentroid.x - prevCentroid.x) * scale;
-      const dy = (nextCentroid.y - prevCentroid.y) * scale;
-      if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+      const dx = (nextCentroid.x - prevCentroid.x) * scale * SCROLL_SCALE;
+      const dy = (nextCentroid.y - prevCentroid.y) * scale * SCROLL_SCALE;
+      if (dx !== 0 || dy !== 0) {
         onScroll(dx, dy);
       }
       return;
@@ -115,6 +126,7 @@ export function Touchpad({ onMove, onScroll, onClick, onMoveEnd, sensitivity = 1
     if (pointers.size >= 2) {
       lastCentroidRef.current = centroid(pointers);
       lastPosRef.current = null;
+      onScrollEnd?.();
       return;
     }
 
@@ -134,6 +146,7 @@ export function Touchpad({ onMove, onScroll, onClick, onMoveEnd, sensitivity = 1
     }
 
     onMoveEnd?.();
+    onScrollEnd?.();
 
     lastPosRef.current = null;
     lastCentroidRef.current = null;
