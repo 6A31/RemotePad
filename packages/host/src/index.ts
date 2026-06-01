@@ -10,6 +10,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function resolveWebDistPath(): string {
   const candidates = [
+    join(__dirname, "../web"),
     join(__dirname, "web"),
     join(__dirname, "../../web/dist"),
   ];
@@ -18,7 +19,7 @@ function resolveWebDistPath(): string {
       return candidate;
     }
   }
-  return join(__dirname, "../../web/dist");
+  return join(__dirname, "../web");
 }
 
 const webDistPath = resolveWebDistPath();

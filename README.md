@@ -6,9 +6,17 @@ RemotePad runs in the background on your PC and serves a small website over WiFi
 
 ## What you need
 
+**To develop or build RemotePad**
+
 - Windows 10 or later
 - Node.js 18+
 - Your PC and phone on the same network
+
+**To run the portable build on another PC**
+
+- Windows 10 or later (64-bit)
+- Same WiFi/LAN as your phone
+- Nothing else to install: copy the `out/RemotePad` folder and double-click `start.cmd`
 
 ## Quick start (development)
 
@@ -35,13 +43,21 @@ To find your PC's IP, run `ipconfig` and look for the IPv4 address on your WiFi 
 
 ## Portable Windows build
 
-To pack everything into a folder you can copy to another PC:
+To pack a self-contained folder you can copy to another PC:
 
 ```bash
 npm run build:win
 ```
 
-Output goes to `out/RemotePad/`. The target PC still needs Node.js 18+ installed. Double-click `start.cmd` to run.
+Output goes to `out/RemotePad/`. It includes:
+
+- The compiled app and web UI
+- Production `node_modules` (native screen capture, tray, etc.)
+- A bundled Node.js runtime in `node/` (downloaded during the build)
+
+On the target PC, double-click `start.cmd`. You do **not** need Node, npm, or any install step there.
+
+This is still a **folder**, not one `.exe` file. Zip it, copy it to a USB drive, or drop it anywhere on the PC and run `start.cmd`. Building requires Node on your dev machine and an internet connection the first time (to download the Windows Node runtime, then cached in `out/.node-cache/`).
 
 ## Login
 

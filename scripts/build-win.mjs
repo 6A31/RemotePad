@@ -1,13 +1,82 @@
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
+import { pipeline } from "node:stream/promises";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const outDir = join(root, "out", "RemotePad");
+const nodeCacheDir = join(root, "out", ".node-cache");
 
-function run(command) {
-  execSync(command, { cwd: root, stdio: "inherit", shell: true });
+/** Must match the Node ABI used when native modules are compiled in out/RemotePad. */
+const NODE_VERSION = "22.14.0";
+const NODE_DIST = `node-v${NODE_VERSION}-win-x64`;
+const NODE_ZIP = `${NODE_DIST}.zip`;
+const NODE_URL = `https://nodejs.org/dist/v${NODE_VERSION}/${NODE_ZIP}`;
+
+function run(command, options = {}) {
+  execSync(command, { cwd: root, stdio: "inherit", shell: true, ...options });
+}
+
+async function downloadFile(url, dest) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download ${url}: ${response.status} ${response.statusText}`);
+  }
+  mkdirSync(dirname(dest), { recursive: true });
+  await pipeline(response.body, createWriteStream(dest));
+}
+
+async function ensureBundledNode(targetNodeDir) {
+  const zipPath = join(nodeCacheDir, NODE_ZIP);
+  const extractRoot = join(nodeCacheDir, NODE_DIST);
+
+  if (!existsSync(zipPath)) {
+    console.log(`Downloading Node.js ${NODE_VERSION} for Windows x64…`);
+    await downloadFile(NODE_URL, zipPath);
+  } else {
+    console.log(`Using cached Node.js ${NODE_VERSION} (${zipPath})`);
+  }
+
+  if (!existsSync(join(extractRoot, "node.exe"))) {
+    rmSync(extractRoot, { recursive: true, force: true });
+    mkdirSync(extractRoot, { recursive: true });
+    execSync(
+      `powershell -NoProfile -Command "Expand-Archive -LiteralPath '${zipPath.replace(/'/g, "''")}' -DestinationPath '${nodeCacheDir.replace(/'/g, "''")}' -Force"`,
+      { stdio: "inherit" },
+    );
+  }
+
+  rmSync(targetNodeDir, { recursive: true, force: true });
+  mkdirSync(targetNodeDir, { recursive: true });
+
+  const extractedDir = join(nodeCacheDir, NODE_DIST);
+  for (const entry of readdirSync(extractedDir)) {
+    cpSync(join(extractedDir, entry), join(targetNodeDir, entry), { recursive: true });
+  }
+
+  const nodeExe = join(targetNodeDir, "node.exe");
+  if (!existsSync(nodeExe)) {
+    throw new Error(`Bundled Node missing after extract: ${nodeExe}`);
+  }
+
+  return targetNodeDir;
+}
+
+function bundledNodeEnv(nodeDir) {
+  return {
+    ...process.env,
+    PATH: `${nodeDir};${process.env.PATH ?? ""}`,
+  };
 }
 
 console.log("Syncing brand assets…");
@@ -19,6 +88,10 @@ run("npm run build");
 console.log("Staging portable layout…");
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
+
+const nodeDir = join(outDir, "node");
+await ensureBundledNode(nodeDir);
+const nodeExe = join(nodeDir, "node.exe");
 
 cpSync(join(root, "packages", "host", "dist"), join(outDir, "dist"), { recursive: true });
 cpSync(join(root, "packages", "web", "dist"), join(outDir, "web"), { recursive: true });
@@ -64,14 +137,16 @@ const stagingPkg = {
 
 writeFileSync(join(outDir, "package.json"), JSON.stringify(stagingPkg, null, 2));
 
+const nodeRel = "%~dp0node\\node.exe";
+
 writeFileSync(
   join(outDir, "start.cmd"),
-  `@echo off\r\ncd /d "%~dp0"\r\nnode dist\\index.js\r\n`,
+  `@echo off\r\ncd /d "%~dp0"\r\n"${nodeRel}" dist\\index.js\r\nif errorlevel 1 pause\r\n`,
 );
 
 writeFileSync(
   join(outDir, "change-password.cmd"),
-  `@echo off\r\ncd /d "%~dp0"\r\nnode dist\\change-password.js %*\r\npause\r\n`,
+  `@echo off\r\ncd /d "%~dp0"\r\n"${nodeRel}" dist\\change-password.js %*\r\npause\r\n`,
 );
 
 writeFileSync(
@@ -80,13 +155,24 @@ writeFileSync(
 );
 
 console.log("Installing production dependencies (native modules may take a minute)…");
-execSync("npm install --omit=dev --no-audit --no-fund", {
+execSync(`"${join(nodeDir, "npm.cmd")}" install --omit=dev --no-audit --no-fund`, {
   cwd: outDir,
   stdio: "inherit",
   shell: true,
+  env: bundledNodeEnv(nodeDir),
 });
 
+console.log("Trimming bundled Node to runtime only (dropping npm)…");
+for (const entry of readdirSync(nodeDir)) {
+  if (entry !== "node.exe") {
+    rmSync(join(nodeDir, entry), { recursive: true, force: true });
+  }
+}
+
+const bundledVersion = execSync(`"${nodeExe}" --version`, { encoding: "utf8" }).trim();
 console.log("");
 console.log(`Portable build ready: ${outDir}`);
-console.log("Requires Node.js 18+ on the target PC.");
-console.log("Run out\\RemotePad\\start.cmd to launch.");
+console.log(`Bundled runtime: ${bundledVersion}`);
+console.log("Copy the RemotePad folder to another Windows PC and run start.cmd.");
+console.log("No Node.js, npm, or install step needed on the target PC.");
+console.log("This is a folder, not a single .exe file.");
