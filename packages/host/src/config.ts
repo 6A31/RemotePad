@@ -77,3 +77,8 @@ export function clearFirstRunPassword(): void {
 export function getConfigPath(): string {
   return process.env.REMOTEPAD_CONFIG_PATH ?? DEFAULT_CONFIG_PATH;
 }
+
+export async function persistRobloxMode(config: AppConfig, enabled: boolean): Promise<void> {
+  config.robloxMode = enabled;
+  await saveConfig(config);
+}

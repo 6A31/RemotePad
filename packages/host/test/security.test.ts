@@ -42,7 +42,7 @@ async function startServer(
 ): Promise<{ app: FastifyInstance; port: number; screen: MockScreenCapture; webDir: string }> {
   resetRateLimits();
   const webDir = await makeWebRoot();
-  const app = await buildServer({ config, webDistPath: webDir, screen });
+  const { app } = await buildServer({ config, webDistPath: webDir, screen });
   await app.listen({ port: 0, host: "127.0.0.1" });
   const address = app.server.address() as AddressInfo;
   return { app, port: address.port, screen, webDir };

@@ -4,6 +4,8 @@ declare module "systray2" {
     tooltip: string;
     checked: boolean;
     enabled: boolean;
+    click?: () => void;
+    items?: SysTrayItem[];
   }
 
   interface SysTrayMenu {
@@ -21,12 +23,19 @@ declare module "systray2" {
 
   interface SysTrayClickAction {
     seq_id: number;
+    item: SysTrayItem;
+  }
+
+  interface SysTrayUpdateAction {
+    type: "update-item";
+    item: SysTrayItem;
   }
 
   export default class SysTray {
     static separator: unknown;
     constructor(options: SysTrayOptions);
     onClick(callback: (action: SysTrayClickAction) => void): void;
+    sendAction(action: SysTrayUpdateAction): void;
     kill(remove: boolean): void;
   }
 }

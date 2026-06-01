@@ -200,8 +200,26 @@ async function handleClientMessage(
   return {};
 }
 
-export async function buildServer(options: ServerOptions): Promise<FastifyInstance> {
+export interface BuiltServer {
+  app: FastifyInstance;
+  notifyConfigChange: () => void;
+}
+
+export async function buildServer(options: ServerOptions): Promise<BuiltServer> {
   const { config, webDistPath, screen = new ScreenCapture(), logger = false } = options;
+  const configSubscribers = new Set<WebSocket>();
+
+  const notifyConfigChange = (): void => {
+    const payload = JSON.stringify({
+      type: "config.updated",
+      robloxMode: config.robloxMode,
+    });
+    for (const subscriber of configSubscribers) {
+      if (subscriber.readyState === subscriber.OPEN) {
+        subscriber.send(payload);
+      }
+    }
+  };
 
   const app = Fastify({
     logger,
@@ -217,7 +235,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
   });
 
   registerInfoRoute(app, config);
-  registerConfigRoute(app, config);
+  registerConfigRoute(app, config, notifyConfigChange);
 
   app.post("/api/login", async (request, reply) => {
     const ip = request.ip;
@@ -290,6 +308,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
           if (ok) {
             authenticated = true;
+            configSubscribers.add(socket);
             clearTimeout(authTimer);
             clearFailedAttempts(ip);
             socket.send(JSON.stringify({ type: "auth.ok" }));
@@ -322,6 +341,7 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
 
     socket.on("close", async () => {
       clearTimeout(authTimer);
+      configSubscribers.delete(socket);
       unsubscribe?.();
       if (authenticated) {
         await releaseAllKeys();
@@ -344,11 +364,11 @@ export async function buildServer(options: ServerOptions): Promise<FastifyInstan
     return reply.sendFile("index.html");
   });
 
-  return app;
+  return { app, notifyConfigChange };
 }
 
-export async function createServer(options: ServerOptions): Promise<FastifyInstance> {
-  const app = await buildServer({ ...options, logger: true });
+export async function createServer(options: ServerOptions): Promise<BuiltServer> {
+  const { app, notifyConfigChange } = await buildServer({ ...options, logger: true });
   await app.listen({ host: "0.0.0.0", port: options.config.port });
-  return app;
+  return { app, notifyConfigChange };
 }

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { AppConfigPatchSchema } from "@remotepad/protocol";
 import type { AppConfig } from "../config.js";
-import { saveConfig } from "../config.js";
+import { persistRobloxMode } from "../config.js";
 import { verifyToken } from "../security/auth.js";
 
 function readBearerToken(authorization: string | undefined): string | null {
@@ -10,7 +10,11 @@ function readBearerToken(authorization: string | undefined): string | null {
   return token || null;
 }
 
-export function registerConfigRoute(app: FastifyInstance, config: AppConfig): void {
+export function registerConfigRoute(
+  app: FastifyInstance,
+  config: AppConfig,
+  notifyConfigChange: () => void,
+): void {
   app.patch("/api/config", async (request, reply) => {
     const token = readBearerToken(request.headers.authorization);
     if (!token || !verifyToken(config, token)) {
@@ -23,8 +27,8 @@ export function registerConfigRoute(app: FastifyInstance, config: AppConfig): vo
     }
 
     if (parsed.data.robloxMode !== undefined) {
-      config.robloxMode = parsed.data.robloxMode;
-      await saveConfig(config);
+      await persistRobloxMode(config, parsed.data.robloxMode);
+      notifyConfigChange();
     }
 
     return { robloxMode: config.robloxMode };

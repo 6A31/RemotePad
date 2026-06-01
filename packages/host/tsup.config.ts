@@ -1,4 +1,6 @@
 import { defineConfig } from "tsup";
+import { cpSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 
 export default defineConfig({
   entry: ["src/index.ts"],
@@ -13,5 +15,11 @@ export default defineConfig({
     "sharp",
     "systray2",
     "bcrypt",
+    "to-ico",
   ],
+  onSuccess() {
+    const distAssets = join("dist", "assets");
+    mkdirSync(distAssets, { recursive: true });
+    cpSync("assets/icon.svg", join(distAssets, "icon.svg"));
+  },
 });

@@ -24,7 +24,8 @@
     "koffi": "^3.0.2",
     "node-screenshots": "^0.2.1",
     "sharp": "^0.33.5",
-    "systray2": "^2.1.4"
+    "systray2": "^2.1.4",
+    "to-ico": "^1.1.5"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",

@@ -95,6 +95,10 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
     message: z.string(),
   }),
   z.object({ type: z.literal("stream.ok") }),
+  z.object({
+    type: z.literal("config.updated"),
+    robloxMode: z.boolean(),
+  }),
 ]);
 
 export type ServerMessage = z.infer<typeof ServerMessageSchema>;

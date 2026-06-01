@@ -1,6 +1,6 @@
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadConfig, getFirstRunPassword, clearFirstRunPassword } from "./config.js";
+import { loadConfig, getFirstRunPassword, clearFirstRunPassword, persistRobloxMode } from "./config.js";
 import { createServer, getServerUrls } from "./server.js";
 import { startTray } from "./tray.js";
 import { ensureFirewallRule } from "./firewall.js";
@@ -12,7 +12,7 @@ async function main(): Promise<void> {
   const config = await loadConfig();
   const firstRunPassword = getFirstRunPassword();
 
-  const app = await createServer({ config, webDistPath });
+  const { app, notifyConfigChange } = await createServer({ config, webDistPath });
   const urls = getServerUrls(config.port);
 
   const firewall = await ensureFirewallRule(config.port);
@@ -42,8 +42,14 @@ async function main(): Promise<void> {
   try {
     tray = await startTray({
       urls,
+      port: config.port,
       username: config.username,
       firstRunPassword,
+      getRobloxMode: () => config.robloxMode,
+      setRobloxMode: async (enabled) => {
+        await persistRobloxMode(config, enabled);
+        notifyConfigChange();
+      },
       onQuit: async () => {
         await app.close();
         tray?.kill();

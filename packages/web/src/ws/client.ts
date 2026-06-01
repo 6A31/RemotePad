@@ -241,6 +241,9 @@ export class RemotePadClient {
       case "stream.ok":
         this.bandwidthWarningHandler?.(null);
         break;
+      case "config.updated":
+        window.dispatchEvent(new CustomEvent("remotepad-config-updated"));
+        break;
     }
   }
 
