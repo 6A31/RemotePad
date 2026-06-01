@@ -7,6 +7,8 @@ export interface SavedHost {
   origin: string;
   hostname: string;
   lastSeen: number;
+  /** Last username that signed in successfully on this origin (client-only). */
+  lastUsername?: string;
 }
 
 function readAll(): SavedHost[] {
@@ -24,14 +26,26 @@ function writeAll(entries: SavedHost[]): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
 }
 
-export function rememberHost(origin: string, hostname: string): void {
+export function rememberHost(origin: string, hostname: string, lastUsername?: string): void {
   const now = Date.now();
-  const existing = readAll().filter((entry) => entry.origin !== origin);
+  const all = readAll();
+  const previous = all.find((entry) => entry.origin === origin);
+  const existing = all.filter((entry) => entry.origin !== origin);
   const updated: SavedHost[] = [
-    { origin, hostname, lastSeen: now },
+    {
+      origin,
+      hostname,
+      lastSeen: now,
+      lastUsername: lastUsername ?? previous?.lastUsername,
+    },
     ...existing,
   ].slice(0, MAX_ENTRIES);
   writeAll(updated);
+}
+
+export function getLastUsername(origin: string): string {
+  const entry = readAll().find((item) => item.origin === origin);
+  return entry?.lastUsername ?? "";
 }
 
 export function listRecentHosts(currentOrigin: string): SavedHost[] {

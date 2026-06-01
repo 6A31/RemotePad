@@ -6,6 +6,7 @@ import {
   rememberHost,
   removeHost,
   formatSavedHostAddress,
+  getLastUsername,
   type SavedHost,
 } from "../lib/hostHistory";
 
@@ -14,15 +15,14 @@ interface LoginViewProps {
 }
 
 export function LoginView({ onLogin }: LoginViewProps) {
-  const [username, setUsername] = useState("admin");
+  const origin = currentOrigin();
+  const [username, setUsername] = useState(() => getLastUsername(origin));
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [hostInfo, setHostInfo] = useState<HostInfo | null>(null);
   const [recentHosts, setRecentHosts] = useState<SavedHost[]>([]);
   const [otherHost, setOtherHost] = useState("");
-
-  const origin = currentOrigin();
 
   useEffect(() => {
     void fetchHostInfo().then((info) => {
@@ -81,9 +81,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
       }
 
       const { token } = await res.json();
-      if (hostInfo) {
-        rememberHost(origin, hostInfo.hostname);
-      }
+      rememberHost(origin, hostInfo?.hostname ?? origin, username);
       onLogin(token);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not sign in");
@@ -115,6 +113,7 @@ export function LoginView({ onLogin }: LoginViewProps) {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   autoComplete="username"
+                  placeholder="Username"
                   required
                 />
               </label>
