@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig, getFirstRunPassword, clearFirstRunPassword, persistRobloxMode } from "./config.js";
@@ -6,7 +7,21 @@ import { startTray } from "./tray.js";
 import { ensureFirewallRule } from "./firewall.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const webDistPath = join(__dirname, "../../web/dist");
+
+function resolveWebDistPath(): string {
+  const candidates = [
+    join(__dirname, "web"),
+    join(__dirname, "../../web/dist"),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(join(candidate, "index.html"))) {
+      return candidate;
+    }
+  }
+  return join(__dirname, "../../web/dist");
+}
+
+const webDistPath = resolveWebDistPath();
 
 async function main(): Promise<void> {
   const config = await loadConfig();

@@ -1,8 +1,8 @@
 import SysTrayModule from "systray2";
 import { ensureTrayIcon } from "./icon.js";
 import { repairFirewallRule } from "./firewall.js";
-import { resetLoginPassword } from "./tray-actions.js";
-import { showInfoDialog } from "./win-dialog.js";
+import { resetLoginPassword, createLoginPassword } from "./tray-actions.js";
+import { showInfoDialog, showPasswordCreateDialog } from "./win-dialog.js";
 
 const SysTray =
   (SysTrayModule as unknown as { default: typeof SysTrayModule }).default ??
@@ -63,7 +63,7 @@ export async function startTray(options: TrayOptions): Promise<{ kill: () => voi
 
   const resetPasswordItem: TrayMenuItem = {
     title: "Reset password…",
-    tooltip: "Generate a new login password",
+    tooltip: "Generate a new random word password",
     checked: false,
     enabled: true,
     click: () => {
@@ -71,13 +71,40 @@ export async function startTray(options: TrayOptions): Promise<{ kill: () => voi
         try {
           const { username, password } = await resetLoginPassword();
           await showInfoDialog(
-            "RemotePad — new password",
+            "RemotePad: new password",
             `User: ${username}\nPass: ${password}\n\nSave this before closing.`,
           );
         } catch (err) {
           await showInfoDialog(
-            "RemotePad — password reset failed",
+            "RemotePad: password reset failed",
             err instanceof Error ? err.message : "Could not reset password.",
+          );
+        }
+      })();
+    },
+  };
+
+  const createPasswordItem: TrayMenuItem = {
+    title: "Create new password…",
+    tooltip: "Choose your own password (6+ characters)",
+    checked: false,
+    enabled: process.platform === "win32",
+    click: () => {
+      void (async () => {
+        try {
+          const password = await showPasswordCreateDialog();
+          if (!password) {
+            return;
+          }
+          const { username } = await createLoginPassword(password);
+          await showInfoDialog(
+            "RemotePad: password updated",
+            `Login password changed for user "${username}".`,
+          );
+        } catch (err) {
+          await showInfoDialog(
+            "RemotePad: password update failed",
+            err instanceof Error ? err.message : "Could not update password.",
           );
         }
       })();
@@ -94,12 +121,12 @@ export async function startTray(options: TrayOptions): Promise<{ kill: () => voi
         try {
           const result = await repairFirewallRule(options.port);
           await showInfoDialog(
-            result.ok ? "RemotePad — firewall" : "RemotePad — firewall failed",
+            result.ok ? "RemotePad: firewall" : "RemotePad: firewall failed",
             result.message,
           );
         } catch (err) {
           await showInfoDialog(
-            "RemotePad — firewall failed",
+            "RemotePad: firewall failed",
             err instanceof Error ? err.message : "Could not update firewall rule.",
           );
         }
@@ -112,7 +139,7 @@ export async function startTray(options: TrayOptions): Promise<{ kill: () => voi
     tooltip: "RemotePad settings",
     checked: false,
     enabled: true,
-    items: [robloxModeItem, resetPasswordItem, fixFirewallItem],
+    items: [robloxModeItem, resetPasswordItem, createPasswordItem, fixFirewallItem],
   };
 
   const quitItem: TrayMenuItem = {

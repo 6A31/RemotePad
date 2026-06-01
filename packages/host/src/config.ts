@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { randomBytes } from "node:crypto";
 import bcrypt from "bcrypt";
 import { DEFAULT_PORT } from "@remotepad/protocol";
+import { generateWordPassword } from "./generate-password.js";
 
 export interface AppConfig {
   username: string;
@@ -19,7 +20,7 @@ const DEFAULT_CONFIG_PATH = join(CONFIG_DIR, "config.json");
 let cachedPlainPassword: string | null = null;
 
 function generatePassword(): string {
-  return randomBytes(9).toString("base64url");
+  return generateWordPassword();
 }
 
 export async function loadConfig(): Promise<AppConfig> {

@@ -33,7 +33,7 @@ export async function ensureTrayIcon(): Promise<string> {
       return icoPath;
     }
   } catch {
-    // icon.ico missing — generate below
+    // icon.ico missing; generate below
   }
 
   const svg = await readFile(svgPath);

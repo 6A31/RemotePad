@@ -11,7 +11,7 @@ interface TouchpadProps {
 }
 
 const LONG_PRESS_MS = 500;
-/** Two-finger scroll uses a higher gain than pointer movement — small per-frame deltas add up poorly otherwise. */
+/** Two-finger scroll uses a higher gain than pointer movement; small per-frame deltas add up poorly otherwise. */
 const SCROLL_SCALE = 2.75;
 
 function centroid(pointers: Map<number, { x: number; y: number }>): { x: number; y: number } {

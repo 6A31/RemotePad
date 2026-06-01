@@ -1,7 +1,9 @@
 node_modules/
 dist/
+out/
 *.log
 .env
 .DS_Store
 packages/web/dist/
 packages/host/dist/
+**/assets/icon.ico

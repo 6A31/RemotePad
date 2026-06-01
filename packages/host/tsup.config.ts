@@ -3,7 +3,10 @@ import { cpSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 export default defineConfig({
-  entry: ["src/index.ts"],
+  entry: {
+    index: "src/index.ts",
+    "change-password": "scripts/change-password.ts",
+  },
   format: ["esm"],
   target: "node18",
   outDir: "dist",
@@ -20,6 +23,6 @@ export default defineConfig({
   onSuccess() {
     const distAssets = join("dist", "assets");
     mkdirSync(distAssets, { recursive: true });
-    cpSync("assets/icon.svg", join(distAssets, "icon.svg"));
+    cpSync(join("..", "..", "assets", "icon.svg"), join(distAssets, "icon.svg"));
   },
 });

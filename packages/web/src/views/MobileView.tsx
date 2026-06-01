@@ -29,7 +29,7 @@ import { getStoredMouseMode, storeMouseMode, type MouseMode } from "../lib/mouse
 import { isLandscapePhone, shouldShowBrowserHint } from "../lib/displayMode";
 import type { ViewMode } from "../App";
 
-/** Desktop touchpad moves slower than game mode — 1:1 finger pixels feel too fast on a full desktop. */
+/** Desktop touchpad moves slower than game mode; 1:1 finger pixels feel too fast on a full desktop. */
 const DESKTOP_POINTER_SCALE = 0.55;
 
 function releaseInventoryKeys(): void {

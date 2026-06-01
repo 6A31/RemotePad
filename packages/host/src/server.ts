@@ -145,7 +145,7 @@ async function handleClientMessage(
                 JSON.stringify({
                   type: "stream.warn",
                   message:
-                    "Network is falling behind — frames are backing up. Try lowering quality or check your connection.",
+                    "Network is falling behind. Frames are backing up. Try lowering quality or check your connection.",
                 }),
               );
             },

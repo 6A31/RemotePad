@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
-import { randomBytes } from "node:crypto";
 import { loadConfig, updatePassword, updateUsername, getConfigPath } from "../src/config.js";
+import { generateWordPassword } from "../src/generate-password.js";
 
 function parseArgs(argv: string[]): { password?: string; username?: string } {
   let password: string | undefined;
@@ -29,7 +29,7 @@ function parseArgs(argv: string[]): { password?: string; username?: string } {
 }
 
 const { password: passwordArg, username: newUsername } = parseArgs(process.argv.slice(2));
-const newPassword = passwordArg ?? randomBytes(9).toString("base64url");
+const newPassword = passwordArg ?? generateWordPassword();
 
 await loadConfig();
 await updatePassword(newPassword);
