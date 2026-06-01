@@ -28,7 +28,10 @@ export function InventoryButton({ onKeyDown, onKeyUp }: InventoryButtonProps) {
   };
 
   const handleModeChange = (next: HotbarMode) => {
-    if (next === mode) return;
+    if (next === mode) {
+      handleDismiss();
+      return;
+    }
     toggleEmoteWheel();
     setMode(next);
   };
