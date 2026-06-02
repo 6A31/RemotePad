@@ -16,6 +16,7 @@ export const ScreenCanvas = forwardRef<HTMLCanvasElement, ScreenCanvasProps>(
     ref,
   ) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const drawGenerationRef = useRef(0);
 
     useEffect(() => {
       const canvas = canvasRef.current;
@@ -24,14 +25,31 @@ export const ScreenCanvas = forwardRef<HTMLCanvasElement, ScreenCanvasProps>(
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      const blob = new Blob([new Uint8Array(frame.jpeg)], { type: "image/jpeg" });
+      const generation = ++drawGenerationRef.current;
+      const jpegBytes = new Uint8Array(frame.jpeg);
+
+      const draw = (source: CanvasImageSource) => {
+        if (generation !== drawGenerationRef.current) return;
+        canvas.width = frame.width;
+        canvas.height = frame.height;
+        ctx.drawImage(source, 0, 0);
+      };
+
+      if (typeof createImageBitmap === "function") {
+        const blob = new Blob([jpegBytes], { type: "image/jpeg" });
+        void createImageBitmap(blob).then((bitmap) => {
+          draw(bitmap);
+          bitmap.close();
+        });
+        return;
+      }
+
+      const blob = new Blob([jpegBytes], { type: "image/jpeg" });
       const url = URL.createObjectURL(blob);
       const img = new Image();
 
       img.onload = () => {
-        canvas.width = frame.width;
-        canvas.height = frame.height;
-        ctx.drawImage(img, 0, 0);
+        draw(img);
         URL.revokeObjectURL(url);
       };
       img.onerror = () => URL.revokeObjectURL(url);

@@ -1,7 +1,7 @@
 import { encodeFrameBinary, type BinaryFrame } from "@remotepad/protocol";
 import type { FramePayload } from "../capture/screen.js";
 
-export const MAX_WS_BUFFER_BYTES = 512 * 1024;
+export const MAX_WS_BUFFER_BYTES = 1024 * 1024;
 export const SKIPPED_FRAMES_BEFORE_WARN = 5;
 
 export function frameToBinaryPacket(frame: FramePayload): Buffer {

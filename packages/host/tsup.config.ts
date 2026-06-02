@@ -6,6 +6,7 @@ export default defineConfig({
   entry: {
     index: "src/index.ts",
     "change-password": "scripts/change-password.ts",
+    "encode-worker": "src/capture/encode-worker.ts",
   },
   format: ["esm"],
   target: "node18",
@@ -15,6 +16,7 @@ export default defineConfig({
   external: [
     "@nut-tree-fork/nut-js",
     "node-screenshots",
+    "windows-desktop-duplication",
     "sharp",
     "systray2",
     "bcrypt",

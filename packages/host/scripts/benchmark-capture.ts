@@ -6,6 +6,12 @@
 import { performance } from "node:perf_hooks";
 import { Monitor } from "node-screenshots";
 import sharp from "sharp";
+import {
+  downscaleJpeg,
+  encodeRgbaStreamJpeg,
+  encodeStreamJpeg,
+} from "../src/capture/encode-frame.js";
+import { createDxgiBackend } from "../src/capture/dxgi-backend.js";
 import { QUALITY_PRESETS, resolveStreamSettings } from "../src/capture/screen.js";
 
 const FRAMES = 60;
@@ -48,8 +54,27 @@ async function main(): Promise<void> {
 
   const captureOnly: number[] = [];
   const nativeJpeg: number[] = [];
-  const rawToSharpJpeg: number[] = [];
+  const jpegDownscale: number[] = [];
+  const rgbaDownscale: number[] = [];
   const productionPath: number[] = [];
+  const dxgiCapture: number[] = [];
+  const dxgiEncode: number[] = [];
+  const dxgiProduction: number[] = [];
+
+  let dxgi: ReturnType<typeof createDxgiBackend> = null;
+  if (process.platform === "win32") {
+    try {
+      dxgi = createDxgiBackend(0);
+      dxgi?.initialize();
+      if (dxgi) {
+        const probe = dxgi.getFrame();
+        console.log(`  DXGI:    ${probe.width}x${probe.height} (Desktop Duplication API)`);
+      }
+    } catch {
+      console.log("  DXGI:    unavailable");
+      dxgi = null;
+    }
+  }
 
   for (let i = 0; i < WARMUP + FRAMES; i++) {
     const image = await monitor.captureImage();
@@ -62,49 +87,77 @@ async function main(): Promise<void> {
       captureOnly.push(performance.now() - t0);
 
       t0 = performance.now();
-      await image.toJpeg();
+      await image.toJpeg(false);
       nativeJpeg.push(performance.now() - t0);
 
       t0 = performance.now();
-      const rgba = Buffer.from(await image.toRaw(false));
-      let pipeline = sharp(rgba, { raw: { width, height, channels: 4 } });
-      if (width > settings.maxWidth) {
-        const scaledHeight = Math.round((height * settings.maxWidth) / width);
-        pipeline = pipeline.resize(settings.maxWidth, scaledHeight, { fit: "inside" });
-      }
-      await pipeline.jpeg({ quality: settings.jpegQuality, mozjpeg: true }).toBuffer();
-      rawToSharpJpeg.push(performance.now() - t0);
+      const fullJpeg = Buffer.from(await image.toJpeg(false));
+      await downscaleJpeg(fullJpeg, width, height, settings);
+      jpegDownscale.push(performance.now() - t0);
     }
 
-    const t0 = performance.now();
+    const prodStart = performance.now();
     const fresh = await monitor.captureImage();
-    const w = fresh.width;
-    const h = fresh.height;
-    const rgba = Buffer.from(await fresh.toRaw(false));
-    let pipeline = sharp(rgba, { raw: { width: w, height: h, channels: 4 } });
-    if (w > settings.maxWidth) {
-      const scaledHeight = Math.round((h * settings.maxWidth) / w);
-      pipeline = pipeline.resize(settings.maxWidth, scaledHeight, { fit: "inside" });
-    }
-    await pipeline.jpeg({ quality: settings.jpegQuality, mozjpeg: true }).toBuffer();
+    await encodeStreamJpeg(fresh, settings);
     if (i >= WARMUP) {
-      productionPath.push(performance.now() - t0);
+      productionPath.push(performance.now() - prodStart);
+    }
+
+    if (dxgi && i >= WARMUP) {
+      let t0 = performance.now();
+      const dxgiFrame = dxgi.getFrame();
+      dxgiCapture.push(performance.now() - t0);
+
+      t0 = performance.now();
+      await encodeRgbaStreamJpeg(dxgiFrame.data, dxgiFrame.width, dxgiFrame.height, settings);
+      dxgiEncode.push(performance.now() - t0);
+
+      const dxgiProdStart = performance.now();
+      const fresh = dxgi.getFrame();
+      await encodeRgbaStreamJpeg(fresh.data, fresh.width, fresh.height, settings);
+      dxgiProduction.push(performance.now() - dxgiProdStart);
+    }
+
+    if (i === WARMUP) {
+      const imageForRgba = await monitor.captureImage();
+      const rgbaStart = performance.now();
+        const rgba = Buffer.from(await imageForRgba.toRaw(false));
+        let pipeline = sharp(rgba, {
+          raw: { width: imageForRgba.width, height: imageForRgba.height, channels: 4 },
+        });
+        const scaledHeight = Math.round((imageForRgba.height * settings.maxWidth) / imageForRgba.width);
+        pipeline = pipeline.resize(settings.maxWidth, scaledHeight, {
+          fit: "inside",
+          fastShrinkOnLoad: true,
+        });
+        await pipeline.jpeg({ quality: settings.jpegQuality, mozjpeg: false }).toBuffer();
+      rgbaDownscale.push(performance.now() - rgbaStart);
     }
   }
 
-  summarize("1) captureImage() only", captureOnly);
-  summarize("2) toJpeg() on captured frame (native, full resolution)", nativeJpeg);
-  summarize("3) toRaw(false) + sharp resize/jpeg (current encode path)", rawToSharpJpeg);
-  summarize("4) full production path (capture + raw + sharp)", productionPath);
+  dxgi?.dispose();
 
-  const prodAvg = productionPath.reduce((a, b) => a + b, 0) / productionPath.length;
+  summarize("1) captureImage() only", captureOnly);
+  summarize("2) toJpeg() on captured frame (native)", nativeJpeg);
+  summarize("3) toJpeg + sharp downscale (new stream path)", jpegDownscale);
+  if (rgbaDownscale.length > 0) {
+    summarize("4) toRaw + sharp downscale (legacy path, one sample)", rgbaDownscale);
+  }
+  summarize("5) full legacy path (capture + encodeStreamJpeg)", productionPath);
+
+  if (dxgiCapture.length > 0) {
+    summarize("6) DXGI getFrame() only", dxgiCapture);
+    summarize("7) DXGI encodeRgbaStreamJpeg (2-pass resize)", dxgiEncode);
+    summarize("8) full DXGI path (capture + encodeRgbaStreamJpeg)", dxgiProduction);
+  }
+
   console.log("\nNotes:");
   console.log(`  Target stream interval: ${(1000 / settings.fps).toFixed(1)} ms (${settings.fps} fps)`);
   console.log(
-    `  If production avg exceeds that, the host skips frames (inFlight) or you see low effective fps.`,
+    `  If production avg exceeds that interval, effective stream fps will be lower.`,
   );
+  console.log("  Windows host uses DXGI + background encode worker when available.");
   console.log("  WiFi/WebSocket backpressure can cap fps even when capture is fast enough.");
-  console.log("  Alternatives: DXGI duplication, Windows Graphics Capture, hardware H.264 (WebRTC).");
 }
 
 await main();
