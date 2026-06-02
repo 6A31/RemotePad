@@ -45,6 +45,6 @@ export function App() {
   return viewMode === "mobile" ? (
     <MobileView {...sharedProps} />
   ) : (
-    <DesktopView onLogout={handleLogout} onViewModeChange={setViewMode} />
+    <DesktopView {...sharedProps} />
   );
 }

@@ -8,8 +8,8 @@ import { JumpButton } from "../components/JumpButton";
 import { HoldKeyButton } from "../components/HoldKeyButton";
 import { Touchpad } from "../components/Touchpad";
 import { ScreenCanvas } from "../components/ScreenCanvas";
-import { MobileHeader } from "../components/MobileHeader";
-import { MobileBrowserHint } from "../components/MobileBrowserHint";
+import { AppStatusBar } from "../components/AppStatusBar";
+import { SettingsPanel } from "../components/SettingsPanel";
 import { MobileRemoteCursor } from "../components/MobileRemoteCursor";
 import { TextEntryOverlay, type TextEntryVariant } from "../components/TextEntryOverlay";
 import { InventoryButton } from "../components/InventoryButton";
@@ -26,10 +26,11 @@ import {
 } from "../lib/mouseSensitivity";
 import { toggleFullscreen } from "../lib/screenUtils";
 import { getStoredMouseMode, storeMouseMode, type MouseMode } from "../lib/mouseMode";
-import { isLandscapePhone, shouldShowBrowserHint } from "../lib/displayMode";
+import { patchAppConfig } from "../lib/appConfig";
+import { layoutSwitchTarget } from "../lib/controlLabels";
 import type { ViewMode } from "../App";
 
-/** Desktop touchpad moves slower than game mode; 1:1 finger pixels feel too fast on a full desktop. */
+/** Work-mode touchpad moves slower than game mode; 1:1 finger pixels feel too fast on a full desktop. */
 const DESKTOP_POINTER_SCALE = 0.55;
 
 function releaseInventoryKeys(): void {
@@ -44,15 +45,16 @@ interface MobileViewProps {
   onViewModeChange: (mode: ViewMode) => void;
 }
 
-export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
+export function MobileView({ onLogout, viewMode, onViewModeChange }: MobileViewProps) {
   const hostInfo = useHostInfo();
   const robloxMode = hostInfo?.robloxMode ?? false;
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const [error, setError] = useState<string | null>(null);
+  const [configError, setConfigError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [mouseSensitivity, setMouseSensitivity] = useState(getStoredMouseSensitivity);
   const [mouseMode, setMouseMode] = useState<MouseMode>(getStoredMouseMode);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showBrowserHint, setShowBrowserHint] = useState(false);
   const [showScreenPreview, setShowScreenPreview] = useState(getStoredMobileScreenPreview);
   const [frame, setFrame] = useState<{
     jpeg: Uint8Array;
@@ -82,6 +84,7 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
   useEffect(() => {
     if (!robloxMode) {
       client.keyUp("q");
+      client.keyUp("e");
       releaseInventoryKeys();
       setTextEntryVariant((current) => (current === "roblox" ? null : current));
     }
@@ -96,30 +99,25 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
       document.body.classList.remove("mobile-session");
       client.keyUp("space");
       client.keyUp("q");
+      client.keyUp("e");
       releaseInventoryKeys();
     };
   }, []);
 
   useEffect(() => {
     const syncFullscreen = () => {
-      const active = document.fullscreenElement === mobileViewRef.current;
-      setIsFullscreen(active);
-      setShowBrowserHint(shouldShowBrowserHint(active) && isLandscapePhone());
+      setIsFullscreen(document.fullscreenElement === mobileViewRef.current);
     };
 
-    const syncLayout = () => {
-      syncFullscreen();
-    };
-
-    syncLayout();
+    syncFullscreen();
     document.addEventListener("fullscreenchange", syncFullscreen);
-    window.addEventListener("orientationchange", syncLayout);
-    window.addEventListener("resize", syncLayout);
+    window.addEventListener("orientationchange", syncFullscreen);
+    window.addEventListener("resize", syncFullscreen);
 
     return () => {
       document.removeEventListener("fullscreenchange", syncFullscreen);
-      window.removeEventListener("orientationchange", syncLayout);
-      window.removeEventListener("resize", syncLayout);
+      window.removeEventListener("orientationchange", syncFullscreen);
+      window.removeEventListener("resize", syncFullscreen);
     };
   }, []);
 
@@ -235,7 +233,6 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
     if (!mobileViewRef.current) return;
     const active = await toggleFullscreen(mobileViewRef.current);
     setIsFullscreen(active);
-    setShowBrowserHint(shouldShowBrowserHint(active) && isLandscapePhone());
   };
 
   const handleOpenRobloxChat = () => {
@@ -247,35 +244,36 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
     setTextEntryVariant("generic");
   };
 
+  const handleRobloxModeChange = async (enabled: boolean) => {
+    const token = sessionStorage.getItem("remotepad_token");
+    if (!token) return;
+
+    setConfigError(null);
+    const result = await patchAppConfig(token, { robloxMode: enabled });
+    if (!result) {
+      setConfigError("Could not save app settings");
+      return;
+    }
+    window.dispatchEvent(new Event("remotepad-config-updated"));
+  };
+
   return (
     <div
       ref={mobileViewRef}
       className={`mobile-view${isFullscreen ? " mobile-view-fullscreen" : ""}`}
     >
-      {!isFullscreen && (
-        <>
-          <MobileHeader
-            connectionState={connectionState}
-            mouseSensitivity={mouseSensitivity}
-            mouseMode={mouseMode}
-            showScreenPreview={showScreenPreview}
-            minSensitivity={MIN_MOUSE_SENSITIVITY}
-            maxSensitivity={MAX_MOUSE_SENSITIVITY}
-            onSensitivityChange={handleSensitivityChange}
-            onMouseModeChange={handleMouseModeChange}
-            onScreenPreviewChange={handleToggleScreenPreview}
-            onFullscreen={() => void handleToggleFullscreen()}
-            onDesktopLayout={() => onViewModeChange("desktop")}
-            onLogout={onLogout}
-          />
-          {showBrowserHint && (
-            <MobileBrowserHint
-              onExpand={() => void handleToggleFullscreen()}
-              onDismiss={() => setShowBrowserHint(false)}
-            />
-          )}
-          {error && <p className="banner error mobile-banner">{error}</p>}
-        </>
+      <AppStatusBar
+        connectionState={connectionState}
+        viewMode={viewMode}
+        isFullscreen={isFullscreen}
+        compact={isFullscreen}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onFullscreen={() => void handleToggleFullscreen()}
+        onSwitchLayout={() => onViewModeChange(layoutSwitchTarget(viewMode))}
+      />
+      {!isFullscreen && error && <p className="banner error mobile-banner">{error}</p>}
+      {!isFullscreen && configError && (
+        <p className="banner error mobile-banner">{configError}</p>
       )}
       <div
         className={`mobile-controls${showScreenPreview ? " mobile-controls-with-preview" : ""}`}
@@ -294,25 +292,6 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
             />
           </div>
         )}
-        {isFullscreen && (
-          <div className="mobile-floating-toggles">
-            <button
-              type="button"
-              className={`mobile-preview-toggle${showScreenPreview ? " active" : ""}`}
-              aria-pressed={showScreenPreview}
-              onClick={handleToggleScreenPreview}
-            >
-              Screen {showScreenPreview ? "on" : "off"}
-            </button>
-            <button
-              type="button"
-              className="mobile-exit-fullscreen"
-              onClick={() => void handleToggleFullscreen()}
-            >
-              Exit fullscreen
-            </button>
-          </div>
-        )}
         <div className="control-panel left-panel">
           <WasdKnob onKeyDown={handleKeyDown} onKeyUp={handleKeyUp} />
           <div className="mobile-action-buttons">
@@ -325,6 +304,13 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
                   onPress={() => handleKeyDown("q")}
                   onRelease={() => handleKeyUp("q")}
                 />
+                <HoldKeyButton
+                  label="E"
+                  ariaLabel="E key"
+                  className="hold-key-button roblox-key-button"
+                  onPress={() => handleKeyDown("e")}
+                  onRelease={() => handleKeyUp("e")}
+                />
                 <InventoryButton onKeyDown={handleKeyDown} onKeyUp={handleKeyUp} />
                 <button
                   type="button"
@@ -334,6 +320,7 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
                 >
                   <MessageSquare size={22} strokeWidth={2} aria-hidden="true" />
                 </button>
+                <JumpButton onPress={handleJumpPress} onRelease={handleJumpRelease} />
               </>
             ) : (
               <button
@@ -345,7 +332,6 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
                 <Keyboard size={22} strokeWidth={2} aria-hidden="true" />
               </button>
             )}
-            <JumpButton onPress={handleJumpPress} onRelease={handleJumpRelease} />
           </div>
         </div>
         <div className="control-panel right-panel">
@@ -370,6 +356,23 @@ export function MobileView({ onLogout, onViewModeChange }: MobileViewProps) {
       {textEntryVariant && (
         <TextEntryOverlay variant={textEntryVariant} onClose={() => setTextEntryVariant(null)} />
       )}
+      <SettingsPanel
+        open={settingsOpen}
+        variant="sheet"
+        onClose={() => setSettingsOpen(false)}
+        viewMode={viewMode}
+        mouseMode={mouseMode}
+        onMouseModeChange={handleMouseModeChange}
+        mouseSensitivity={mouseSensitivity}
+        minSensitivity={MIN_MOUSE_SENSITIVITY}
+        maxSensitivity={MAX_MOUSE_SENSITIVITY}
+        onSensitivityChange={handleSensitivityChange}
+        showScreenPreview={showScreenPreview}
+        onScreenPreviewChange={handleToggleScreenPreview}
+        robloxMode={hostInfo?.robloxMode}
+        onRobloxModeChange={(enabled) => void handleRobloxModeChange(enabled)}
+        onLogout={onLogout}
+      />
     </div>
   );
 }

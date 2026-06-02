@@ -168,8 +168,8 @@ export function Touchpad({
     >
       <span className="touchpad-hint">
         {gameMode
-          ? "Game: swipe to move camera. Tap/hold click. Two fingers scroll."
-          : "Swipe to move pointer. Tap/hold click. Two fingers scroll."}
+          ? "Game mode: swipe to look. Tap or hold to click. Two fingers to scroll."
+          : "Work mode: swipe to move the pointer. Tap or hold to click. Two fingers to scroll."}
       </span>
     </div>
   );

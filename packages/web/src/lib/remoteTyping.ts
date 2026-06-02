@@ -2,6 +2,31 @@ import { client } from "../ws/client";
 
 const KEY_GAP_MS = 35;
 
+/** US QWERTY: shifted symbol → unshifted protocol key name */
+const SHIFTED_CHAR_KEYS: Record<string, string> = {
+  "!": "1",
+  "@": "2",
+  "#": "3",
+  "$": "4",
+  "%": "5",
+  "^": "6",
+  "&": "7",
+  "*": "8",
+  "(": "9",
+  ")": "0",
+  "_": "minus",
+  "+": "equal",
+  "{": "leftbracket",
+  "}": "rightbracket",
+  "|": "backslash",
+  ":": "semicolon",
+  '"': "quote",
+  "<": "comma",
+  ">": "period",
+  "?": "slash",
+  "~": "grave",
+};
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -9,6 +34,13 @@ function delay(ms: number): Promise<void> {
 export function tapKey(key: string): void {
   client.keyDown(key);
   client.keyUp(key);
+}
+
+function tapKeyWithShift(key: string): void {
+  client.keyDown("shift");
+  client.keyDown(key);
+  client.keyUp(key);
+  client.keyUp("shift");
 }
 
 export function charToProtocolKey(char: string): string | null {
@@ -46,8 +78,23 @@ export function charToProtocolKey(char: string): string | null {
 }
 
 export function typeChar(char: string): void {
+  if (char.length !== 1) return;
+
+  if (char >= "A" && char <= "Z") {
+    tapKeyWithShift(char.toLowerCase());
+    return;
+  }
+
+  const shiftedKey = SHIFTED_CHAR_KEYS[char];
+  if (shiftedKey) {
+    tapKeyWithShift(shiftedKey);
+    return;
+  }
+
   const key = charToProtocolKey(char);
-  if (key) tapKey(key);
+  if (key) {
+    tapKey(key);
+  }
 }
 
 export async function abortRemoteText(): Promise<void> {

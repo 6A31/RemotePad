@@ -46,13 +46,13 @@ export interface ScreenCaptureLike {
 
 export class ScreenCapture implements ScreenCaptureLike {
   private subscribers = new Set<FrameListener>();
-  private timer: NodeJS.Timeout | null = null;
   private seq = 0;
   private monitor: Monitor | null = null;
   private quality: StreamQuality = "medium";
   private clientMaxWidth: number | undefined;
   private settings: QualitySettings = resolveStreamSettings("medium");
-  private inFlight = false;
+  private loopActive = false;
+  private loopTimer: ReturnType<typeof setTimeout> | null = null;
 
   subscribe(listener: FrameListener): () => void {
     this.subscribers.add(listener);
@@ -71,25 +71,44 @@ export class ScreenCapture implements ScreenCaptureLike {
       this.clientMaxWidth = clientMaxWidth;
     }
     this.settings = resolveStreamSettings(this.quality, this.clientMaxWidth);
-    if (this.timer && this.subscribers.size > 0) {
+    if (this.loopActive && this.subscribers.size > 0) {
       this.stopLoop();
       this.ensureLoop();
     }
   }
 
   private ensureLoop(): void {
-    if (this.timer) return;
-    const intervalMs = Math.floor(1000 / this.settings.fps);
-    this.timer = setInterval(() => {
-      void this.captureAndBroadcast();
-    }, intervalMs);
+    if (this.loopActive) return;
+    this.loopActive = true;
+    void this.runCaptureLoop();
   }
 
   private stopLoop(): void {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
+    this.loopActive = false;
+    if (this.loopTimer) {
+      clearTimeout(this.loopTimer);
+      this.loopTimer = null;
     }
+  }
+
+  /** Schedule the next frame after the previous one finishes (avoids piling up work). */
+  private async runCaptureLoop(): Promise<void> {
+    const intervalMs = Math.floor(1000 / this.settings.fps);
+
+    while (this.loopActive && this.subscribers.size > 0) {
+      const started = performance.now();
+      await this.captureAndBroadcast();
+      if (!this.loopActive || this.subscribers.size === 0) break;
+
+      const elapsed = performance.now() - started;
+      const waitMs = Math.max(0, intervalMs - elapsed);
+      await new Promise<void>((resolve) => {
+        this.loopTimer = setTimeout(resolve, waitMs);
+      });
+      this.loopTimer = null;
+    }
+
+    this.loopActive = false;
   }
 
   private getPrimaryMonitor(): Monitor {
@@ -104,35 +123,45 @@ export class ScreenCapture implements ScreenCaptureLike {
   }
 
   private async captureAndBroadcast(): Promise<void> {
-    if (this.subscribers.size === 0 || this.inFlight) return;
+    if (this.subscribers.size === 0) return;
 
-    this.inFlight = true;
     try {
       const monitor = this.getPrimaryMonitor();
       const image = await monitor.captureImage();
       const width = image.width;
       const height = image.height;
-      const rgba = Buffer.from(await image.toRaw(false));
+      const source = getPrimaryMonitorInfo();
 
-      let pipeline = sharp(rgba, {
-        raw: { width, height, channels: 4 },
-      });
+      let jpeg: Buffer;
+      let outWidth: number;
+      let outHeight: number;
 
-      if (width > this.settings.maxWidth) {
+      if (width <= this.settings.maxWidth) {
+        jpeg = Buffer.from(await image.toJpeg(false));
+        outWidth = width;
+        outHeight = height;
+      } else {
+        const rgba = Buffer.from(await image.toRaw(false));
+        let pipeline = sharp(rgba, {
+          raw: { width, height, channels: 4 },
+        });
         const scaledHeight = Math.round((height * this.settings.maxWidth) / width);
         pipeline = pipeline.resize(this.settings.maxWidth, scaledHeight, { fit: "inside" });
+
+        const { data, info } = await pipeline
+          .jpeg({ quality: this.settings.jpegQuality, mozjpeg: true })
+          .toBuffer({ resolveWithObject: true });
+        jpeg = data;
+        outWidth = info.width;
+        outHeight = info.height;
       }
 
-      const { data, info } = await pipeline
-        .jpeg({ quality: this.settings.jpegQuality, mozjpeg: true })
-        .toBuffer({ resolveWithObject: true });
-
       const frame: FramePayload = {
-        jpeg: data,
-        width: info.width,
-        height: info.height,
-        sourceWidth: getPrimaryMonitorInfo().inputWidth,
-        sourceHeight: getPrimaryMonitorInfo().inputHeight,
+        jpeg,
+        width: outWidth,
+        height: outHeight,
+        sourceWidth: source.inputWidth,
+        sourceHeight: source.inputHeight,
         seq: ++this.seq,
       };
 
@@ -141,8 +170,6 @@ export class ScreenCapture implements ScreenCaptureLike {
       }
     } catch (err) {
       console.error("[capture] frame error:", err);
-    } finally {
-      this.inFlight = false;
     }
   }
 

@@ -26,7 +26,7 @@ export class RemotePadClient {
   private token: string | null = null;
   private frameHandler: FrameHandler | null = null;
   private onStateChange: ((state: ConnectionState) => void) | null = null;
-  private onError: ((message: string) => void) | null = null;
+  private onError: ((message: string | null) => void) | null = null;
   private bandwidthWarningHandler: ((message: string | null) => void) | null = null;
   private state: ConnectionState = "disconnected";
   private streaming = false;
@@ -54,7 +54,7 @@ export class RemotePadClient {
     this.onStateChange = handler;
   }
 
-  onConnectionError(handler: (message: string) => void): void {
+  onConnectionError(handler: (message: string | null) => void): void {
     this.onError = handler;
   }
 
@@ -224,6 +224,7 @@ export class RemotePadClient {
       case "auth.ok":
         this.reconnectAttempt = 0;
         this.clearReconnectTimer();
+        this.onError?.(null);
         this.setState("connected");
         break;
       case "auth.fail":

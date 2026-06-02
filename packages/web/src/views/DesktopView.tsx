@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { StreamQuality } from "@remotepad/protocol";
 import { ScreenCanvas } from "../components/ScreenCanvas";
-import { HostLabel } from "../components/HostLabel";
+import { AppStatusBar } from "../components/AppStatusBar";
+import { SettingsPanel } from "../components/SettingsPanel";
 import { client, type ConnectionState } from "../ws/client";
 import { mapCanvasCoords, toggleFullscreen } from "../lib/screenUtils";
 import { keyboardEventToProtocolKey } from "../lib/keyUtils";
@@ -10,30 +11,22 @@ import { getStoredMouseMode, storeMouseMode, type MouseMode } from "../lib/mouse
 import { getStoredMouseSensitivity } from "../lib/mouseSensitivity";
 import { useHostInfo } from "../hooks/useHostInfo";
 import { patchAppConfig } from "../lib/appConfig";
+import { layoutSwitchTarget } from "../lib/controlLabels";
 import type { ViewMode } from "../App";
-
-const QUALITY_OPTIONS: { value: StreamQuality; label: string }[] = [
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-];
-
-const MOUSE_MODE_OPTIONS: { value: MouseMode; label: string }[] = [
-  { value: "absolute", label: "Desktop" },
-  { value: "relative", label: "Game" },
-];
 
 interface DesktopViewProps {
   onLogout: () => void;
+  viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
 }
 
-export function DesktopView({ onLogout, onViewModeChange }: DesktopViewProps) {
+export function DesktopView({ onLogout, viewMode, onViewModeChange }: DesktopViewProps) {
   const hostInfo = useHostInfo();
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const [configError, setConfigError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [bandwidthWarning, setBandwidthWarning] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [quality, setQuality] = useState<StreamQuality>(getStoredQuality);
   const [mouseMode, setMouseMode] = useState<MouseMode>(getStoredMouseMode);
   const [mouseSensitivity] = useState(getStoredMouseSensitivity);
@@ -271,74 +264,29 @@ export function DesktopView({ onLogout, onViewModeChange }: DesktopViewProps) {
 
   return (
     <div className="desktop-view">
-      <header className="toolbar">
-        <HostLabel />
-        <span className={`status status-${connectionState}`}>{connectionState}</span>
-        <div className="toolbar-actions">
-          <div className="quality-control">
-            <span className="quality-label">Mouse</span>
-            <div className="segmented-control" role="group" aria-label="Mouse mode">
-              {MOUSE_MODE_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={mouseMode === option.value ? "active" : undefined}
-                  aria-pressed={mouseMode === option.value}
-                  onClick={() => handleMouseModeChange(option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="quality-control">
-            <span className="quality-label">Quality</span>
-            <div className="segmented-control" role="group" aria-label="Stream quality">
-              {QUALITY_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={quality === option.value ? "active" : undefined}
-                  aria-pressed={quality === option.value}
-                  onClick={() => handleQualityChange(option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="quality-control">
-            <span className="quality-label">Roblox</span>
-            <div className="segmented-control" role="group" aria-label="Roblox mode">
-              <button
-                type="button"
-                className={hostInfo?.robloxMode ? undefined : "active"}
-                aria-pressed={!hostInfo?.robloxMode}
-                onClick={() => hostInfo?.robloxMode && void handleRobloxModeChange(false)}
-              >
-                Off
-              </button>
-              <button
-                type="button"
-                className={hostInfo?.robloxMode ? "active" : undefined}
-                aria-pressed={hostInfo?.robloxMode ?? false}
-                onClick={() => !hostInfo?.robloxMode && void handleRobloxModeChange(true)}
-              >
-                On
-              </button>
-            </div>
-          </div>
-          <button type="button" onClick={() => void handleFullscreen()}>
-            {isFullscreen ? "Exit fullscreen" : "Fullscreen"}
-          </button>
-          <button type="button" onClick={() => onViewModeChange("mobile")}>
-            Mobile layout
-          </button>
-          <button type="button" onClick={onLogout}>
-            Logout
-          </button>
-        </div>
-      </header>
+      <div className="app-chrome">
+        <AppStatusBar
+          connectionState={connectionState}
+          viewMode={viewMode}
+          isFullscreen={isFullscreen}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onFullscreen={() => void handleFullscreen()}
+          onSwitchLayout={() => onViewModeChange(layoutSwitchTarget(viewMode))}
+        />
+        <SettingsPanel
+          open={settingsOpen}
+          variant="dropdown"
+          onClose={() => setSettingsOpen(false)}
+          viewMode={viewMode}
+          mouseMode={mouseMode}
+          onMouseModeChange={handleMouseModeChange}
+          quality={quality}
+          onQualityChange={handleQualityChange}
+          robloxMode={hostInfo?.robloxMode}
+          onRobloxModeChange={(enabled) => void handleRobloxModeChange(enabled)}
+          onLogout={onLogout}
+        />
+      </div>
       {error && <p className="banner error">{error}</p>}
       {configError && <p className="banner error">{configError}</p>}
       {bandwidthWarning && !error && !configError && (
@@ -355,8 +303,8 @@ export function DesktopView({ onLogout, onViewModeChange }: DesktopViewProps) {
         {!inputCaptured && (
           <p className="screen-viewport-hint">
             {mouseMode === "relative"
-              ? "Click the screen for game mode (relative mouse). Esc to release."
-              : "Click the screen to control keyboard and mouse"}
+              ? "Game mode: click the screen to capture the mouse. Esc to release."
+              : "Work mode: click the screen to control keyboard and mouse"}
           </p>
         )}
         <ScreenCanvas
