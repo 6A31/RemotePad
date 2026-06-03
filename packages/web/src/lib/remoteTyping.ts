@@ -97,7 +97,8 @@ export function typeChar(char: string): void {
   }
 }
 
-export async function abortRemoteText(): Promise<void> {
+/** Roblox chat: select all, clear, close with Enter. */
+export async function abortRobloxChatText(): Promise<void> {
   client.keyDown("ctrl");
   tapKey("a");
   client.keyUp("ctrl");
@@ -105,6 +106,23 @@ export async function abortRemoteText(): Promise<void> {
   tapKey("backspace");
   await delay(KEY_GAP_MS);
   tapKey("enter");
+}
+
+/** Generic / desktop fields: undo what we typed, then Escape to dismiss focus. */
+export async function abortGenericRemoteText(typedLength: number): Promise<void> {
+  for (let i = 0; i < typedLength; i++) {
+    tapKey("backspace");
+    await delay(KEY_GAP_MS);
+  }
+  if (typedLength > 0) {
+    await delay(KEY_GAP_MS);
+  }
+  tapKey("escape");
+}
+
+/** @deprecated Use abortRobloxChatText or abortGenericRemoteText */
+export async function abortRemoteText(): Promise<void> {
+  await abortRobloxChatText();
 }
 
 export async function sendRemoteText(): Promise<void> {

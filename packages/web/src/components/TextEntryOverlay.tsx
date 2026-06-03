@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { abortRemoteText, sendRemoteText, typeChar, tapKey } from "../lib/remoteTyping";
+import {
+  abortGenericRemoteText,
+  abortRobloxChatText,
+  sendRemoteText,
+  typeChar,
+  tapKey,
+} from "../lib/remoteTyping";
 
 export type TextEntryVariant = "generic" | "roblox";
 
@@ -50,7 +56,11 @@ export function TextEntryOverlay({ variant, onClose }: TextEntryOverlayProps) {
     if (busy) return;
     setBusy(true);
     try {
-      await abortRemoteText();
+      if (variant === "roblox") {
+        await abortRobloxChatText();
+      } else {
+        await abortGenericRemoteText(value.length);
+      }
       onClose();
     } finally {
       setBusy(false);
@@ -88,7 +98,7 @@ export function TextEntryOverlay({ variant, onClose }: TextEntryOverlayProps) {
             Send
           </button>
           <button type="button" className="text-entry-abort" disabled={busy} onClick={() => void handleAbort()}>
-            Abort
+            {variant === "roblox" ? "Abort" : "Cancel"}
           </button>
         </div>
       </div>

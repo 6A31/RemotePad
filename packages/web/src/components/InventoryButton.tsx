@@ -20,27 +20,44 @@ export function InventoryButton({ onKeyDown, onKeyUp }: InventoryButtonProps) {
     tapKey("period");
   };
 
-  const handleOpen = () => {
-    setOpen(true);
-    if (mode === "emote") {
+  const closeOverlay = (closeEmoteWheel: boolean) => {
+    if (mode === "emote" && closeEmoteWheel) {
       toggleEmoteWheel();
     }
+    setOpen(false);
+  };
+
+  const handleOpen = () => {
+    setMode("inventory");
+    setOpen(true);
   };
 
   const handleModeChange = (next: HotbarMode) => {
     if (next === mode) {
-      handleDismiss();
+      closeOverlay(mode === "emote");
       return;
     }
-    toggleEmoteWheel();
-    setMode(next);
-  };
-
-  const handleDismiss = () => {
     if (mode === "emote") {
       toggleEmoteWheel();
     }
-    setOpen(false);
+    setMode(next);
+    if (next === "emote") {
+      toggleEmoteWheel();
+    }
+  };
+
+  const handleDismiss = () => {
+    closeOverlay(mode === "emote");
+  };
+
+  const handleSlotPress = (key: string) => {
+    onKeyDown(key);
+  };
+
+  const handleSlotRelease = (key: string) => {
+    onKeyUp(key);
+    // Roblox closes the emote wheel when a slot is used; inventory needs no extra key.
+    closeOverlay(false);
   };
 
   return (
@@ -84,8 +101,8 @@ export function InventoryButton({ onKeyDown, onKeyUp }: InventoryButtonProps) {
             </div>
           }
           onDismiss={handleDismiss}
-          onKeyDown={onKeyDown}
-          onKeyUp={onKeyUp}
+          onKeyDown={handleSlotPress}
+          onKeyUp={handleSlotRelease}
         />
       )}
     </>

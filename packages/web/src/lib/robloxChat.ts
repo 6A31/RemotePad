@@ -3,6 +3,6 @@ export {
   typeChar,
   charToProtocolKey,
   openRobloxChat,
-  abortRemoteText as abortRobloxChat,
+  abortRobloxChatText as abortRobloxChat,
   sendRemoteText as sendRobloxChat,
 } from "./remoteTyping";
